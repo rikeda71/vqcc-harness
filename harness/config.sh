@@ -17,6 +17,21 @@ VQCC_SEVEN_DAY_LIMIT="${VQCC_SEVEN_DAY_LIMIT:-80}"
 # After a 5h stop, resume workers once the window has reset (if still inside the night window).
 VQCC_RESUME_AFTER_RESET="${VQCC_RESUME_AFTER_RESET:-1}"
 
+# Session rotation (keeps workers away from auto-compaction): when a worker's context reaches this
+# many tokens, the Stop hook asks it to hand off via NOTES.md and the supervisor restarts it in a
+# fresh session.
+VQCC_ROTATE_TOKENS="${VQCC_ROTATE_TOKENS:-120000}"
+
+# Nightly schedule (bin/vqcc-schedule start|stop|status): a LaunchAgent starts the supervisor at
+# VQCC_WINDOW_START every night until stopped, or until the supervisor disables it because the
+# competition is over or Kaggle stays unreachable.
+VQCC_LAUNCHD_LABEL="${VQCC_LAUNCHD_LABEL:-com.rikeda71.vqcc-harness}"
+# Kaggle health check (harness/kaggle_health.py): at night start, retry this many times 5 minutes
+# apart before giving up; during the night it runs every 10 minutes and this many consecutive
+# failures end the night. Either way the schedule is disabled.
+VQCC_KAGGLE_START_RETRIES="${VQCC_KAGGLE_START_RETRIES:-6}"
+VQCC_KAGGLE_FAIL_MAX="${VQCC_KAGGLE_FAIL_MAX:-3}"
+
 # Workers to run (one interactive Claude Code session per task).
 VQCC_WORKERS="${VQCC_WORKERS:-invsqrt dqi dfthcsos}"
 VQCC_HERDR_SESSION="${VQCC_HERDR_SESSION:-vqcc}"  # herdr named session (attach: herdr --session vqcc)
@@ -78,8 +93,29 @@ vqcc_in_window() {
   if [ "$s" -le "$e" ]; then [ "$n" -ge "$s" ] && [ "$n" -lt "$e" ]; else [ "$n" -ge "$s" ] || [ "$n" -lt "$e" ]; fi
 }
 
+# Minutes until the window starts next (0 inside the window).
+vqcc_min_to_start() {
+  vqcc_in_window && { echo 0; return; }
+  local s n; s=$(_hhmm_to_min "$VQCC_WINDOW_START"); n=$(_now_min)
+  echo $(( (s - n + 1440) % 1440 ))
+}
+
 # Minutes until the window ends (only meaningful inside the window).
 vqcc_min_to_end() {
   local e n; e=$(_hhmm_to_min "$VQCC_WINDOW_END"); n=$(_now_min)
   echo $(( (e - n + 1440) % 1440 ))
+}
+
+# --- schedule helpers --------------------------------------------------------
+vqcc_plist() { echo "$HOME/Library/LaunchAgents/$VQCC_LAUNCHD_LABEL.plist"; }
+vqcc_launchd_loaded() { launchctl print "gui/$(id -u)/$VQCC_LAUNCHD_LABEL" >/dev/null 2>&1; }
+
+# Turn the nightly schedule off: write state/DISABLED and remove the LaunchAgent plist (so it is
+# gone after a reboot). The caller unloads the job (launchctl bootout) itself: when the caller is
+# the supervisor started by that job, unloading kills it, so it must be the caller's last step.
+vqcc_disable() {  # $1 = reason
+  printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$1" > "$VQCC_STATE/DISABLED"
+  rm -f "$(vqcc_plist)"
+  vqcc_log "schedule disabled: $1"
+  osascript -e "display notification \"$(printf '%s' "$1" | head -c 150 | tr -d '"\\')\" with title \"vqcc-harness: 夜間スケジュール停止\"" 2>/dev/null
 }

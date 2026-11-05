@@ -1,0 +1,126 @@
+#!/bin/bash
+# Nightly schedule of the harness (used by the /vqcc-night skill; can also be run by hand).
+#
+#   bin/vqcc-schedule start    register a LaunchAgent that starts bin/night-supervisor every night at
+#                              VQCC_WINDOW_START; if we are inside the window now, start tonight's run
+#                              immediately. Stays registered (also across reboots) until `stop`, or
+#                              until the supervisor disables it (competition over / Kaggle unreachable).
+#   bin/vqcc-schedule stop     unregister it and end a running night (workers wrap up, ~5 min grace)
+#   bin/vqcc-schedule status   registration, running night, last night's report summary
+#
+# The supervisor runs under launchd, detached from any Claude session, so closing the claude
+# session that ran the skill does not affect it.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." >/dev/null 2>&1 && pwd -P)"
+. "$ROOT/harness/config.sh"
+DOMAIN="gui/$(id -u)"
+PLIST="$(vqcc_plist)"
+
+if [ -n "${VQCC_WORKER:-}" ]; then
+  echo "refused: night workers must not change the schedule" >&2; exit 2
+fi
+
+sup_pid() { local p; p=$(cat "$VQCC_STATE/supervisor.pid" 2>/dev/null) && kill -0 "$p" 2>/dev/null && echo "$p"; }
+
+write_plist() {
+  local h m
+  h=$((10#${VQCC_WINDOW_START:0:2})); m=$((10#${VQCC_WINDOW_START:2:2}))
+  mkdir -p "$(dirname "$PLIST")"
+  cat > "$PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$VQCC_LAUNCHD_LABEL</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>$ROOT/bin/night-supervisor</string></array>
+  <key>WorkingDirectory</key><string>$ROOT</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>$h</integer><key>Minute</key><integer>$m</integer></dict>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>$HOME/.local/bin:/opt/homebrew/bin:/run/current-system/sw/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>LANG</key><string>ja_JP.UTF-8</string>
+  </dict>
+  <key>StandardOutPath</key><string>$VQCC_STATE/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>$VQCC_STATE/logs/launchd.err.log</string>
+  <key>ProcessType</key><string>Interactive</string>
+</dict>
+</plist>
+EOF
+  plutil -lint "$PLIST" >/dev/null
+}
+
+status() {
+  echo "== vqcc nightly schedule"
+  if [ -f "$PLIST" ] && vqcc_launchd_loaded; then
+    echo "schedule : ON  (every night $VQCC_WINDOW_START-$VQCC_WINDOW_END; $PLIST)"
+  elif vqcc_launchd_loaded; then
+    echo "schedule : OFF (plist removed; the loaded job is unloaded when the running night ends, or at logout)"
+  else
+    echo "schedule : OFF"
+  fi
+  [ -f "$VQCC_STATE/DISABLED" ] && echo "disabled : $(cat "$VQCC_STATE/DISABLED")"
+  local p; p=$(sup_pid)
+  if [ -n "$p" ]; then
+    echo "night    : RUNNING (supervisor pid $p, night $(cat "$VQCC_STATE/night_id" 2>/dev/null), $(vqcc_min_to_end) min left)"
+    echo "           watch: herdr --session $VQCC_HERDR_SESSION"
+  elif vqcc_in_window; then
+    echo "night    : not running (inside the window)"
+  elif vqcc_launchd_loaded; then
+    echo "night    : not running; next start in $(vqcc_min_to_start) min ($VQCC_WINDOW_START)"
+  else
+    echo "night    : not running; no night will start until /vqcc-night (bin/vqcc-schedule start)"
+  fi
+  echo "usage    : $(vqcc_usage)  (5h% resets_at 7d% age_s)"
+  echo "== last night's report"
+  cat "$VQCC_STATE/last_report_summary.txt" 2>/dev/null || echo "(none yet)"
+  [ -f "$ROOT/reports/DAILY.md" ] && { echo "== recent nights (reports/DAILY.md)"; tail -n 5 "$ROOT/reports/DAILY.md"; }
+  [ -f "$VQCC_STATE/SUBMIT_BLOCKED" ] && echo "!! auto-submit blocked: state/SUBMIT_BLOCKED"
+  echo "== supervisor log (tail)"
+  tail -n 5 "$VQCC_STATE/logs/supervisor.log" 2>/dev/null
+}
+
+case "${1:-status}" in
+  start)
+    # Refuse to start when the competition is over or Kaggle is unreachable right now.
+    if ! h=$("$ROOT/.venv/bin/python" -I "$ROOT/harness/kaggle_health.py"); then
+      echo "not started: $h"; exit 1
+    fi
+    echo "kaggle   : $h"
+    rm -f "$VQCC_STATE/DISABLED"
+    write_plist || { echo "plist invalid: $PLIST"; exit 1; }
+    p=$(sup_pid)
+    if vqcc_launchd_loaded && [ -z "$p" ]; then
+      launchctl bootout "$DOMAIN/$VQCC_LAUNCHD_LABEL" >/dev/null 2>&1   # reload (window may have changed)
+    fi
+    # (with a night running under the job, unloading would kill it: keep the loaded job as is)
+    if ! vqcc_launchd_loaded && ! launchctl bootstrap "$DOMAIN" "$PLIST"; then
+      echo "launchctl bootstrap failed"; exit 1
+    fi
+    vqcc_log "schedule: started (daily $VQCC_WINDOW_START)"
+    if [ -n "$p" ]; then
+      echo "a night is already running (supervisor pid $p)"
+    elif vqcc_in_window; then
+      launchctl kickstart "$DOMAIN/$VQCC_LAUNCHD_LABEL" && echo "inside the window: tonight's run started now"
+      sleep 5
+    fi
+    status ;;
+  stop)
+    rm -f "$PLIST"
+    printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "stopped by user (vqcc-schedule stop)" > "$VQCC_STATE/DISABLED"
+    vqcc_log "schedule: stopped by user"
+    p=$(sup_pid)
+    if [ -n "$p" ]; then
+      # Unloading the job now would kill the supervisor mid-night. Ask it to end the night instead
+      # (workers wrap up, report is written); it unloads the job itself as its last step.
+      touch "$VQCC_STATE/STOP"
+      echo "schedule removed; the running night ends in about 5 minutes (state/STOP)"
+    else
+      launchctl bootout "$DOMAIN/$VQCC_LAUNCHD_LABEL" >/dev/null 2>&1
+      echo "schedule removed"
+    fi
+    status ;;
+  status) status ;;
+  *) echo "usage: bin/vqcc-schedule start|stop|status" >&2; exit 2 ;;
+esac

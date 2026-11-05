@@ -1,10 +1,16 @@
 #!/bin/bash
-# Night supervisor: started by launchd at the window start (or by hand). Runs in the foreground
+# Night supervisor: started every night at the window start by the LaunchAgent that
+# `bin/vqcc-schedule start` (skill /vqcc-night) registers, or by hand. Runs in the foreground
 # until the window closes, keeping one interactive Claude Code worker per task alive in a herdr
 # session (named session "vqcc", one tab per worker).
 #
-#   bin/night-supervisor            run (exits immediately when outside the night window)
-#   bin/night-supervisor --force    run even outside the window (testing; still obeys usage guard)
+#   bin/night-supervisor            run (exits immediately when outside the night window, or when
+#                                   the schedule is disabled: state/DISABLED)
+#   bin/night-supervisor --force    run even outside the window (testing; still obeys usage guard;
+#                                   never submits and never disables the schedule)
+#
+# The schedule disables itself (state/DISABLED + LaunchAgent removed) when the competition is over
+# or Kaggle stays unreachable (harness/kaggle_health.py).
 #
 # Observe:  herdr --session vqcc     (attach the TUI)     logs: state/logs/supervisor.log
 # Stop now: touch state/STOP          (workers finish their turn and stop; supervisor exits)
@@ -26,14 +32,42 @@ fi
 echo $$ > "$LOCK"
 trap 'rm -f "$LOCK"' EXIT
 
+# Unloading our own LaunchAgent job kills this process, so it is always the last thing we do.
+unload_if_disabled() {
+  [ "$FORCE" = 0 ] && [ -f "$VQCC_STATE/DISABLED" ] && launchctl bootout "gui/$(id -u)/$VQCC_LAUNCHD_LABEL" >/dev/null 2>&1
+}
+end_schedule() {  # $1 = reason; testing runs (--force) only log it
+  if [ "$FORCE" = 0 ]; then vqcc_disable "$1"; else vqcc_log "supervisor: (--force, schedule untouched) $1"; fi
+}
+if [ "$FORCE" = 0 ] && [ -f "$VQCC_STATE/DISABLED" ]; then
+  vqcc_log "supervisor: schedule disabled ($(cat "$VQCC_STATE/DISABLED")); exit"
+  rm -f "$LOCK"; unload_if_disabled; exit 0
+fi
 in_window || { vqcc_log "supervisor: outside window ($VQCC_WINDOW_START-$VQCC_WINDOW_END), exit"; exit 0; }
 rm -f "$VQCC_STATE/STOP"
-NIGHT_ID="$(date +%Y%m%d-%H%M)"
-echo "$NIGHT_ID" > "$VQCC_STATE/night_id"
-vqcc_log "supervisor: start night $NIGHT_ID workers=[$VQCC_WORKERS] usage=$(vqcc_usage)"
 
 # Keep the Mac awake while we run.
 caffeinate -dimsu -w $$ &
+
+# Is the competition still running and Kaggle reachable? (0 ok, 1 unreachable, 3 over)
+kaggle_check() { KH=$("$ROOT/.venv/bin/python" -I "$ROOT/harness/kaggle_health.py" 2>&1); KRC=$?; }
+for i in $(seq 1 "$VQCC_KAGGLE_START_RETRIES"); do
+  kaggle_check; [ "$KRC" != 1 ] && break
+  vqcc_log "supervisor: kaggle check failed ($i/$VQCC_KAGGLE_START_RETRIES): $KH"
+  [ -f "$VQCC_STATE/STOP" ] && break
+  [ "$i" -lt "$VQCC_KAGGLE_START_RETRIES" ] && sleep 300
+done
+if [ "$KRC" != 0 ]; then
+  if [ -f "$VQCC_STATE/STOP" ]; then vqcc_log "supervisor: STOP during kaggle check"
+  elif [ "$KRC" = 3 ]; then end_schedule "competition over: $KH"
+  else end_schedule "Kaggle unreachable at night start: $KH"; fi
+  vqcc_log "supervisor: not starting tonight"
+  rm -f "$LOCK"; unload_if_disabled; exit 0
+fi
+vqcc_log "supervisor: kaggle $KH"
+NIGHT_ID="$(date +%Y%m%d-%H%M)"
+echo "$NIGHT_ID" > "$VQCC_STATE/night_id"
+vqcc_log "supervisor: start night $NIGHT_ID workers=[$VQCC_WORKERS] usage=$(vqcc_usage)"
 
 S="$VQCC_HERDR_SESSION"
 hd() { herdr --session "$S" "$@"; }
@@ -79,11 +113,13 @@ close_worker() {  # interrupt the worker, keep its last screen in the logs, clos
   rm -f "$(wfile "$w" pane)" "$(wfile "$w" tab)"
 }
 
-start_worker() {
+start_worker() {  # $1 worker, $2 = "fresh" for a new session after a context rotation
   local w="$1" wdir="$VQCC_STATE/workers/$1" resume_id="" out p
   mkdir -p "$wdir" "$ROOT/work/$w"
-  rm -f "$wdir/STOP" "$wdir/waiting" "$wdir/continues"
-  if [ -s "$wdir/session_id" ] && [ "$(cat "$wdir/night_id" 2>/dev/null)" = "$NIGHT_ID" ]; then
+  rm -f "$wdir/STOP" "$wdir/waiting" "$wdir/continues" "$wdir/rotate" "$wdir/rotate_asked"
+  if [ "${2:-}" = fresh ]; then
+    rm -f "$wdir/session_id"; resume_id=fresh
+  elif [ -s "$wdir/session_id" ] && [ "$(cat "$wdir/night_id" 2>/dev/null)" = "$NIGHT_ID" ]; then
     resume_id="$(cat "$wdir/session_id")"
   else
     rm -f "$wdir/session_id"
@@ -100,7 +136,7 @@ start_worker() {
   hd pane run "$p" "harness/worker-launch.sh ${w} ${NIGHT_ID} ${resume_id}; echo \"[vqcc] worker exited rc=\$?\"" >/dev/null
   date +%s > "$wdir/started"
   date +%s > "$wdir/heartbeat"
-  vqcc_log "supervisor: started worker $w in $p ${resume_id:+(resume $resume_id)}"
+  vqcc_log "supervisor: started worker $w in $p ${resume_id:+($resume_id)}"
 }
 
 stop_workers() {  # $1 = reason
@@ -117,7 +153,7 @@ nudge() {  # $1 worker, $2 text
   vqcc_log "supervisor: nudged $1"
 }
 
-PAUSED=0; LAST_POLL=0; SUBMITTED_TONIGHT=0; LAST_SUBMIT_TRY=0; START_TS=$(date +%s)
+PAUSED=0; LAST_POLL=0; KFAIL=0; END_REASON=""; SUBMITTED_TONIGHT=0; LAST_SUBMIT_TRY=0; START_TS=$(date +%s)
 for w in $VQCC_WORKERS; do mkdir -p "$VQCC_STATE/workers/$w"; echo 0 > "$VQCC_STATE/workers/$w/restarts"; done
 
 if vqcc_over_limit; then
@@ -161,6 +197,14 @@ while :; do
 
   for w in $VQCC_WORKERS; do
     wdir="$VQCC_STATE/workers/$w"
+    # Context rotation: the Stop hook let the worker end after it handed off via NOTES.md.
+    # Start a fresh session (not a restart: no budget used, no --resume).
+    if [ -f "$wdir/rotate" ]; then
+      vqcc_log "supervisor: rotating $w to a fresh session ($(cat "$wdir/rotate"))"
+      close_worker "$w"
+      start_worker "$w" fresh
+      continue
+    fi
     if ! worker_alive "$w"; then
       if [ -f "$wdir/STOP" ]; then continue; fi
       rs=$(( $(cat "$wdir/restarts" 2>/dev/null || echo 0) + 1 )); echo "$rs" > "$wdir/restarts"
@@ -198,10 +242,22 @@ while :; do
     fi
   done
 
-  # Poll remote verification jobs every 10 minutes.
-  if [ -x "$ROOT/bin/vqcc-remote" ] && [ $(( now - LAST_POLL )) -ge 600 ]; then
+  # Every 10 minutes: is the competition still on and Kaggle reachable? Then poll remote jobs.
+  if [ $(( now - LAST_POLL )) -ge 600 ]; then
     LAST_POLL=$now
-    "$ROOT/bin/vqcc-remote" poll >> "$VQCC_STATE/logs/remote-poll.log" 2>&1 &
+    kaggle_check
+    if [ "$KRC" = 3 ]; then
+      END_REASON="competition over: $KH"
+    elif [ "$KRC" != 0 ]; then
+      KFAIL=$(( KFAIL + 1 )); vqcc_log "supervisor: kaggle check failed ($KFAIL/$VQCC_KAGGLE_FAIL_MAX): $KH"
+      [ "$KFAIL" -ge "$VQCC_KAGGLE_FAIL_MAX" ] && END_REASON="Kaggle unreachable for $KFAIL checks: $KH"
+    else
+      KFAIL=0
+    fi
+    if [ -n "$END_REASON" ]; then
+      end_schedule "$END_REASON"; stop_workers "$END_REASON"; break
+    fi
+    [ -x "$ROOT/bin/vqcc-remote" ] && "$ROOT/bin/vqcc-remote" poll >> "$VQCC_STATE/logs/remote-poll.log" 2>&1 &
   fi
 
   # Submit when the verified best improved (deterministic policy in harness/submit.py): every
@@ -224,5 +280,6 @@ done
 "$ROOT/bin/vqcc-report" >> "$VQCC_STATE/logs/report.log" 2>&1
 herdr session stop "$S" --json >/dev/null 2>&1
 vqcc_log "supervisor: night $NIGHT_ID done"
+rm -f "$LOCK"; unload_if_disabled
 exit 0
 }

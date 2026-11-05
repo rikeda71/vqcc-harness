@@ -86,7 +86,26 @@ def main() -> int:
     out_dir = ROOT / "reports"; out_dir.mkdir(exist_ok=True)
     path = out_dir / f"{nid}.md"
     path.write_text("\n".join(lines) + "\n")
-    summary = (f"VQCC 夜間ラン {nid}: 検証 {len(recs)} 回, 予測 LB {pred:.4f} "
+    # Day-by-day progress: one row per night in reports/DAILY.md (rerunning a night replaces its row).
+    daily = out_dir / "DAILY.md"
+    head = ["# VQCC nightly progress", "",
+            "| night | predicted LB | change | runs (PASS) | submitted | best public LB | invsqrt | dqi | dfthcsos |",
+            "|---|---|---|---|---|---|---|---|---|"]
+    rows = [l for l in (daily.read_text().splitlines() if daily.exists() else []) if l.startswith("| 2")]
+    rows = [l for l in rows if not l.startswith(f"| {nid} ")]
+    prev = None
+    if rows:
+        try:
+            prev = float(rows[-1].split("|")[2])
+        except ValueError:
+            prev = None
+    pubs = [k["public"] for k in ks if k.get("public") is not None]
+    delta = f"{pred - prev:+.4f}" if prev is not None else "-"
+    rows.append(f"| {nid} | {pred:.4f} | {delta} | {len(recs)} ({sum(r['status']=='PASS' for r in recs)}) | "
+                f"{sum(s['submitted'] for s in subs)} | {max(pubs) if pubs else '-'} | "
+                + " | ".join(f"{ratios[t]:.4f}" for t in ledger.TASKS) + " |")
+    daily.write_text("\n".join(head + rows) + "\n")
+    summary = (f"VQCC 夜間ラン {nid}: 検証 {len(recs)} 回, 予測 LB {pred:.4f} ({delta} vs 前夜) "
                f"(invsqrt {ratios['invsqrt']:.3f} / dqi {ratios['dqi']:.3f} / dfthcsos {ratios['dfthcsos']:.3f}), "
                f"提出 {sum(s['submitted'] for s in subs)} 件。詳細: {path}")
     print(summary)

@@ -1,0 +1,195 @@
+#!/bin/bash
+# Night supervisor: started by launchd at the window start (or by hand). Runs in the foreground
+# until the window closes, keeping one interactive Claude Code worker per task alive in tmux.
+#
+#   bin/night-supervisor            run (exits immediately when outside the night window)
+#   bin/night-supervisor --force    run even outside the window (testing; still obeys usage guard)
+#
+# Observe:  tmux attach -t vqcc      (detach: C-b d)     logs: state/logs/supervisor.log
+# Stop now: touch state/STOP          (workers finish their turn and stop; supervisor exits)
+set -u
+# The whole body is one brace group so bash parses it before running: editing or pulling this
+# file while a night is in progress cannot corrupt the running supervisor.
+{
+ROOT="$(cd "$(dirname "$0")/.." >/dev/null 2>&1 && pwd -P)"
+. "$ROOT/harness/config.sh"
+cd "$ROOT" || exit 1
+
+FORCE=0; [ "${1:-}" = "--force" ] && FORCE=1
+in_window() { [ "$FORCE" = 1 ] || vqcc_in_window; }
+
+LOCK="$VQCC_STATE/supervisor.pid"
+if [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null; then
+  echo "supervisor already running (pid $(cat "$LOCK"))"; exit 0
+fi
+echo $$ > "$LOCK"
+trap 'rm -f "$LOCK"' EXIT
+
+in_window || { vqcc_log "supervisor: outside window ($VQCC_WINDOW_START-$VQCC_WINDOW_END), exit"; exit 0; }
+rm -f "$VQCC_STATE/STOP"
+NIGHT_ID="$(date +%Y%m%d-%H%M)"
+echo "$NIGHT_ID" > "$VQCC_STATE/night_id"
+vqcc_log "supervisor: start night $NIGHT_ID workers=[$VQCC_WORKERS] usage=$(vqcc_usage)"
+
+# Keep the Mac awake while we run.
+caffeinate -dimsu -w $$ &
+
+S="$VQCC_TMUX_SESSION"
+tmux has-session -t "$S" 2>/dev/null || tmux new-session -d -s "$S" -n supervisor -c "$ROOT" \
+  "tail -n 200 -F '$VQCC_STATE/logs/supervisor.log'"
+tmux set-option -t "$S" -g history-limit 200000 >/dev/null
+
+worker_alive() { tmux list-windows -t "$S" -F '#{window_name} #{pane_dead}' 2>/dev/null | grep -q "^w-$1 0$"; }
+
+start_worker() {
+  local w="$1" wdir="$VQCC_STATE/workers/$1" resume_id="" prompt
+  mkdir -p "$wdir" "$ROOT/work/$w"
+  rm -f "$wdir/STOP" "$wdir/waiting" "$wdir/continues"
+  if [ -s "$wdir/session_id" ] && [ "$(cat "$wdir/night_id" 2>/dev/null)" = "$NIGHT_ID" ]; then
+    resume_id="$(cat "$wdir/session_id")"
+    prompt="supervisor により再起動されました (使用量ガードからの再開またはプロセス再起動)。work/$w/NOTES.md と ledger (bin/vqcc-best) で現在地を確認し、続きを進めてください。"
+  else
+    rm -f "$wdir/session_id"
+    prompt="あなたは VQCC 夜間ワーカー「${w}」です。AGENTS.md を読み、skill optimizing-vqcc-circuits の手順に従って task=${w} の回路最適化を自律的に進めてください。まず work/${w}/NOTES.md (無ければ work/${w}/BRIEF.md と work/BRIEF_OVERVIEW.md) と bin/vqcc-best で現在地を把握してから始めること。"
+  fi
+  echo "$NIGHT_ID" > "$wdir/night_id"
+  tmux kill-window -t "$S:w-$w" 2>/dev/null
+  # remain-on-exit lets us see how a worker died; pane_dead tells the loop to restart it.
+  if [ -n "$resume_id" ]; then
+    tmux new-window -d -t "$S" -n "w-$w" -c "$ROOT" -e "VQCC_WORKER=$w" -e "VQCC_NIGHT_ID=$NIGHT_ID" \
+      "$VQCC_CLAUDE_BIN" --permission-mode "$VQCC_PERMISSION_MODE" -n "vqcc-$w" --resume "$resume_id" "$prompt"
+  else
+    tmux new-window -d -t "$S" -n "w-$w" -c "$ROOT" -e "VQCC_WORKER=$w" -e "VQCC_NIGHT_ID=$NIGHT_ID" \
+      "$VQCC_CLAUDE_BIN" --permission-mode "$VQCC_PERMISSION_MODE" -n "vqcc-$w" "$prompt"
+  fi
+  tmux set-option -t "$S:w-$w" remain-on-exit on >/dev/null
+  date +%s > "$wdir/started"
+  date +%s > "$wdir/heartbeat"
+  vqcc_log "supervisor: started worker $w ${resume_id:+(resume $resume_id)}"
+}
+
+stop_workers() {  # $1 = reason
+  local w
+  for w in $VQCC_WORKERS; do
+    if tmux list-windows -t "$S" -F '#{window_name}' 2>/dev/null | grep -qx "w-$w"; then
+      tmux send-keys -t "$S:w-$w" Escape 2>/dev/null; sleep 1
+      tmux send-keys -t "$S:w-$w" C-c 2>/dev/null; sleep 1
+      tmux send-keys -t "$S:w-$w" C-c 2>/dev/null; sleep 2
+      tmux kill-window -t "$S:w-$w" 2>/dev/null
+    fi
+  done
+  vqcc_log "supervisor: stopped workers ($1)"
+}
+
+nudge() {  # $1 worker, $2 text
+  tmux send-keys -t "$S:w-$1" Escape 2>/dev/null; sleep 1
+  tmux send-keys -t "$S:w-$1" -l "$2" 2>/dev/null; sleep 0.5
+  tmux send-keys -t "$S:w-$1" Enter 2>/dev/null
+  vqcc_log "supervisor: nudged $1"
+}
+
+PAUSED=0; LAST_POLL=0; SUBMITTED_TONIGHT=0; LAST_SUBMIT_TRY=0; START_TS=$(date +%s)
+for w in $VQCC_WORKERS; do mkdir -p "$VQCC_STATE/workers/$w"; echo 0 > "$VQCC_STATE/workers/$w/restarts"; done
+
+if vqcc_over_limit; then
+  PAUSED=1; vqcc_log "supervisor: usage over limit at start ($(vqcc_usage)); waiting for reset"
+else
+  for w in $VQCC_WORKERS; do start_worker "$w"; sleep 20; done
+fi
+
+while :; do
+  sleep 60
+  now=$(date +%s)
+
+  if [ -f "$VQCC_STATE/STOP" ]; then
+    vqcc_log "supervisor: STOP file"; sleep 300; stop_workers "STOP file"; break
+  fi
+
+  if ! in_window; then
+    vqcc_log "supervisor: window closed; grace period"
+    sleep 300
+    stop_workers "window closed"; break
+  fi
+
+  # Usage guard (Claude subscription 5h / 7d windows).
+  if vqcc_over_limit; then
+    if [ "$PAUSED" = 0 ]; then
+      PAUSED=1; stop_workers "usage guard $(vqcc_usage)"
+      osascript -e 'display notification "Claude usage guard tripped; workers paused" with title "vqcc-harness"' 2>/dev/null
+    fi
+    if [ "$VQCC_RESUME_AFTER_RESET" != 1 ]; then vqcc_log "supervisor: no resume configured; exit"; break; fi
+    continue
+  fi
+  if [ "$PAUSED" = 1 ]; then
+    # Usage data is stale while no session runs; resume only after the 5h window's reset time.
+    read -r five resets seven age < <(vqcc_usage)
+    if [ "$resets" = "-" ] || [ "$now" -gt $(( resets + 120 )) ]; then
+      PAUSED=0; vqcc_log "supervisor: resuming after reset"
+      for w in $VQCC_WORKERS; do start_worker "$w"; sleep 20; done
+    fi
+    continue
+  fi
+
+  for w in $VQCC_WORKERS; do
+    wdir="$VQCC_STATE/workers/$w"
+    if ! worker_alive "$w"; then
+      if [ -f "$wdir/STOP" ]; then continue; fi
+      rs=$(( $(cat "$wdir/restarts" 2>/dev/null || echo 0) + 1 )); echo "$rs" > "$wdir/restarts"
+      tmux capture-pane -p -S -200 -t "$S:w-$w" > "$VQCC_STATE/logs/dead-$w-$now.txt" 2>/dev/null
+      if [ "$rs" -le 6 ]; then
+        vqcc_log "supervisor: worker $w not alive, restart #$rs"
+        sleep $(( 30 * $rs ))
+        start_worker "$w"
+      elif [ "$rs" -eq 7 ]; then
+        vqcc_log "supervisor: worker $w exceeded restart budget; leaving it down"
+      fi
+      continue
+    fi
+    # Subscription limit message on screen (five_hour is not always present in the status line).
+    if tmux capture-pane -p -t "$S:w-$w" 2>/dev/null | tail -12 | \
+       grep -Eqi "hit your (session |weekly |5-hour )?limit|(usage|session|5-hour|weekly) limit (reached|will reset)|limit reached.*resets"; then
+      echo "$now" > "$VQCC_STATE/limit_hit"
+      vqcc_log "supervisor: limit message in w-$w pane; pausing all workers for 1h"
+      break
+    fi
+    # Waiting on a permission prompt / idle input for a while -> nudge.
+    if [ -f "$wdir/waiting" ]; then
+      read -r wts wtype < "$wdir/waiting"
+      if [ $(( now - wts )) -ge 180 ]; then
+        rm -f "$wdir/waiting"
+        nudge "$w" "(supervisor) この操作の承認者はいません。拒否されたものとして扱い、許可されている手段 (bin/vqcc-* や work/ 内のスクリプト) で代替してください。作業を続行してください。"
+      fi
+    fi
+    # No activity for 40 minutes: the session may be stuck (long tool call is fine, but check).
+    hb=$(cat "$wdir/heartbeat" 2>/dev/null || echo "$now")
+    if [ $(( now - hb )) -ge 2400 ]; then
+      tmux capture-pane -p -S -60 -t "$S:w-$w" > "$VQCC_STATE/logs/stale-$w-$now.txt" 2>/dev/null
+      vqcc_log "supervisor: worker $w no heartbeat for $(( (now - hb) / 60 )) min (snapshot saved)"
+      date +%s > "$wdir/heartbeat"
+    fi
+  done
+
+  # Poll remote verification jobs every 10 minutes.
+  if [ -x "$ROOT/bin/vqcc-remote" ] && [ $(( now - LAST_POLL )) -ge 600 ]; then
+    LAST_POLL=$now
+    "$ROOT/bin/vqcc-remote" poll >> "$VQCC_STATE/logs/remote-poll.log" 2>&1 &
+  fi
+
+  # Submit when the verified best improved (deterministic policy in harness/submit.py): every
+  # 2 hours and once more 15 minutes before the window closes. The daily cap is enforced there.
+  if [ "$FORCE" = 0 ]; then
+    left=$(vqcc_min_to_end)
+    if { [ $(( now - LAST_SUBMIT_TRY )) -ge 7200 ] && [ $(( now - START_TS )) -ge 5400 ]; } || \
+       { [ "$SUBMITTED_TONIGHT" = 0 ] && [ "$left" -le 15 ]; }; then
+      LAST_SUBMIT_TRY=$now
+      [ "$left" -le 15 ] && SUBMITTED_TONIGHT=1
+      "$ROOT/bin/vqcc-submit" --auto >> "$VQCC_STATE/logs/submit.log" 2>&1
+      vqcc_log "supervisor: vqcc-submit --auto exit=$? ($(tail -n 1 "$VQCC_STATE/logs/submit.log"))"
+    fi
+  fi
+done
+
+"$ROOT/bin/vqcc-report" >> "$VQCC_STATE/logs/report.log" 2>&1
+vqcc_log "supervisor: night $NIGHT_ID done"
+exit 0
+}

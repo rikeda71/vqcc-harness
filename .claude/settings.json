@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "statusLine": {
+    "type": "command",
+    "command": "\"$CLAUDE_PROJECT_DIR\"/harness/statusline.sh",
+    "refreshInterval": 60
+  },
+  "hooks": {
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/stop.sh", "timeout": 30 } ] }
+    ],
+    "Notification": [
+      { "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/notify.sh", "timeout": 10 } ] }
+    ],
+    "PostToolUse": [
+      { "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/activity.sh", "timeout": 10 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/activity.sh", "timeout": 10 } ] }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(bin/vqcc-verify *)",
+      "Bash(bin/vqcc-remote *)",
+      "Bash(bin/vqcc-best*)",
+      "Bash(bin/vqcc-status*)",
+      "Bash(git -C work/*)",
+      "Read(./**)",
+      "Edit(./work/**)",
+      "Write(./work/**)"
+    ],
+    "deny": [
+      "Read(~/.kaggle/**)",
+      "Bash(cat ~/.kaggle*)",
+      "Bash(kaggle competitions submit*)",
+      "Bash(bin/vqcc-submit*)",
+      "Bash(git push*)",
+      "Bash(gh *)",
+      "Edit(./data/**)",
+      "Write(./data/**)",
+      "Edit(./ledger/**)",
+      "Write(./ledger/**)"
+    ]
+  }
+}

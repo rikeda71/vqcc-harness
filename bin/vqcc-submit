@@ -1,0 +1,8 @@
+#!/bin/bash
+# Assemble the best verified candidate per task into a submission zip and (optionally) submit it.
+#   bin/vqcc-submit --dry-run      show what would be submitted (default)
+#   bin/vqcc-submit --auto         submit only if policy allows (improvement, daily cap)
+# Workers must not call this (denied in .claude/settings.json); the supervisor calls --auto.
+ROOT="$(cd "$(dirname "$0")/.." >/dev/null 2>&1 && pwd -P)"
+. "$ROOT/harness/config.sh"
+exec "$ROOT/.venv/bin/python" -I "$ROOT/harness/submit.py" "$@"

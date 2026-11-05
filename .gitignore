@@ -1,0 +1,13 @@
+# Competition data, candidates, results and solution work stay local (no redistribution / no solution leak).
+/data/
+/artifacts/
+/ledger/
+/state/
+/work/
+/reports/
+/submissions/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.claude/settings.local.json

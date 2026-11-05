@@ -1,0 +1,4 @@
+#!/bin/sh
+# Run the official verifier on Kaggle CPU kernels. Usage: vqcc-remote {submit|poll|status} ... (see harness/remote.py)
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec "$ROOT/.venv/bin/python" -I "$ROOT/harness/remote.py" "$@"

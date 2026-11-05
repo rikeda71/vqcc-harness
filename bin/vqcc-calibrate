@@ -1,0 +1,4 @@
+#!/bin/bash
+# Thin wrapper: runs harness/cmd_calibrate.py with the project venv (isolated mode).
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec "$ROOT/.venv/bin/python" -I "$ROOT/harness/cmd_calibrate.py" "$@"

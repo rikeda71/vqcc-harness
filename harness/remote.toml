@@ -1,0 +1,14 @@
+# vqcc-remote settings (no secrets here; the Kaggle token lives in ~/.kaggle and is never read by this tool).
+# Environment overrides: VQCC_REMOTE_MAX_CONCURRENT, VQCC_KAGGLE_USER.
+competition = "google-verifiable-quantum-circuit-compilation"
+# Jobs running/pushed at the same time on Kaggle; further submissions wait in the local queue.
+# Measured: Kaggle rejects the 6th batch CPU session ("Maximum batch CPU session count of 5 reached").
+max_concurrent = 5
+# Seconds before Kaggle kills a kernel (passed as `kaggle kernels push -t`). 43200 = the 12 h session maximum.
+kernel_timeout_s = 43200
+# After a job's result is saved under state/remote/out/ and written to the ledger, delete the
+# harness-created private kernel and (when no other unfinished job needs it) the candidate dataset.
+cleanup = true
+# Only Kaggle objects whose slug starts with these prefixes are ever deleted by this tool.
+kernel_prefix = "vqcc-job-"
+dataset_prefix = "vqcc-cand-"

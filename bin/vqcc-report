@@ -1,0 +1,10 @@
+#!/bin/bash
+# Write the morning report (reports/<night_id>.md), notify, and log a line to the Obsidian daily note.
+ROOT="$(cd "$(dirname "$0")/.." >/dev/null 2>&1 && pwd -P)"
+. "$ROOT/harness/config.sh"
+"$ROOT/.venv/bin/python" -I "$ROOT/harness/report.py" || exit 1
+summary="$(cat "$VQCC_STATE/last_report_summary.txt" 2>/dev/null)"
+osascript -e "display notification \"$(printf '%s' "$summary" | head -c 180 | tr -d '"')\" with title \"vqcc-harness\"" 2>/dev/null
+if [ -n "$VQCC_OBSIDIAN_APPEND" ] && [ -x "$VQCC_OBSIDIAN_APPEND" ]; then
+  "$VQCC_OBSIDIAN_APPEND" --task "Kaggle VQCC 夜間自律ラン" done "- $summary" >/dev/null 2>&1 || true
+fi

@@ -4,7 +4,6 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
-import subprocess
 import sys
 from pathlib import Path
 
@@ -13,7 +12,6 @@ import ledger  # noqa: E402
 
 ROOT = ledger.ROOT
 STATE = ROOT / "state"
-COMP = "google-verifiable-quantum-circuit-compilation"
 
 
 def night_start() -> tuple[str, dt.datetime]:
@@ -60,15 +58,19 @@ def main() -> int:
     subs = [s for s in subs if dt.datetime.fromisoformat(s["ts"]) >= start]
     lines += ["", "## Submission attempts", ""]
     lines += [f"- {s['ts']} submitted={s['submitted']} pred={s['predicted']:.4f} ({s.get('reason','')})" for s in subs] or ["- none"]
-    try:
-        out = subprocess.run(["kaggle", "competitions", "submissions", COMP, "--format", "json", "--page-size", "10"],
-                             capture_output=True, text=True, timeout=120).stdout
-        rows = json.loads(out[out.index("["):]) if "[" in out else []
-        lines += ["", "## Kaggle submissions (latest 10)", ""]
-        for r in rows:
-            lines.append(f"- {r.get('date','')} status={r.get('status','')} public={r.get('publicScore','')} :: {str(r.get('description',''))[:100]}")
-    except Exception as e:  # noqa: BLE001
-        lines.append(f"- (could not read Kaggle submissions: {e})")
+    ks = json.loads((STATE / "kaggle_submissions.json").read_text()) if (STATE / "kaggle_submissions.json").exists() else []
+    lines += ["", "## Kaggle results of harness submissions (state/kaggle_submissions.json)", "",
+              "| date | status | public LB | predicted | invsqrt | dqi | dfthcsos |", "|---|---|---|---|---|---|---|"]
+    for k in ks[-15:]:
+        comp = [f"{k['versions'].get(t) or ''} {k['ids'].get(t, '')}".strip() for t in ledger.TASKS]
+        lines.append(f"| {k['date'][:16]} | {k['status']} | {k['public'] if k['public'] is not None else '-'} | "
+                     f"{k['predicted'] if k['predicted'] is not None else '-'} | " + " | ".join(comp) + " |")
+    if not ks:
+        lines.append("| (none) | | | | | | |")
+    if (STATE / "SUBMIT_BLOCKED").exists():
+        lines += ["", "**AUTO-SUBMIT BLOCKED** (state/SUBMIT_BLOCKED; delete after review):", "", "```",
+                  (STATE / "SUBMIT_BLOCKED").read_text().strip(), "```"]
+    lines.append("")
 
     usage = (STATE / "usage.json").read_text().strip() if (STATE / "usage.json").exists() else "{}"
     lines += ["", "## Claude usage (last seen)", "", f"`{usage}`", ""]

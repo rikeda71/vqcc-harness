@@ -1,5 +1,5 @@
 #!/bin/bash
-# Write the morning report (reports/<night_id>.md), notify, and log a line to the Obsidian daily note.
+# Write the morning report (reports/<night_id>.md), notify, and (if VQCC_OBSIDIAN_APPEND=1) log a line to the Obsidian daily note.
 ROOT="$(cd "$(dirname "$0")/.." >/dev/null 2>&1 && pwd -P)"
 . "$ROOT/harness/config.sh"
 "$ROOT/.venv/bin/python" -I "$ROOT/harness/report.py" || exit 1

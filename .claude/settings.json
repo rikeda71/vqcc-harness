@@ -24,6 +24,7 @@
       "Bash(bin/vqcc-verify *)",
       "Bash(bin/vqcc-remote *)",
       "Bash(bin/vqcc-best*)",
+      "Bash(bin/vqcc-model *)",
       "Bash(bin/vqcc-status*)",
       "Bash(git -C work/*)",
       "Read(./**)",
@@ -40,7 +41,9 @@
       "Edit(./data/**)",
       "Write(./data/**)",
       "Edit(./ledger/**)",
-      "Write(./ledger/**)"
+      "Write(./ledger/**)",
+      "Edit(./models/**)",
+      "Write(./models/**)"
     ]
   }
 }

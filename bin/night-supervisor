@@ -1,11 +1,12 @@
 #!/bin/bash
 # Night supervisor: started by launchd at the window start (or by hand). Runs in the foreground
-# until the window closes, keeping one interactive Claude Code worker per task alive in tmux.
+# until the window closes, keeping one interactive Claude Code worker per task alive in a herdr
+# session (named session "vqcc", one tab per worker).
 #
 #   bin/night-supervisor            run (exits immediately when outside the night window)
 #   bin/night-supervisor --force    run even outside the window (testing; still obeys usage guard)
 #
-# Observe:  tmux attach -t vqcc      (detach: C-b d)     logs: state/logs/supervisor.log
+# Observe:  herdr --session vqcc     (attach the TUI)     logs: state/logs/supervisor.log
 # Stop now: touch state/STOP          (workers finish their turn and stop; supervisor exits)
 set -u
 # The whole body is one brace group so bash parses it before running: editing or pulling this
@@ -34,57 +35,85 @@ vqcc_log "supervisor: start night $NIGHT_ID workers=[$VQCC_WORKERS] usage=$(vqcc
 # Keep the Mac awake while we run.
 caffeinate -dimsu -w $$ &
 
-S="$VQCC_TMUX_SESSION"
-tmux has-session -t "$S" 2>/dev/null || tmux new-session -d -s "$S" -n supervisor -c "$ROOT" \
-  "tail -n 200 -F '$VQCC_STATE/logs/supervisor.log'"
-tmux set-option -t "$S" -g history-limit 200000 >/dev/null
+S="$VQCC_HERDR_SESSION"
+hd() { herdr --session "$S" "$@"; }
+wfile() { echo "$VQCC_STATE/workers/$1/$2"; }
+wpane() { cat "$(wfile "$1" pane)" 2>/dev/null; }
 
-worker_alive() { tmux list-windows -t "$S" -F '#{window_name} #{pane_dead}' 2>/dev/null | grep -q "^w-$1 0$"; }
+# A fresh herdr session every night (a named session otherwise restores last night's layout).
+herdr_up() {
+  herdr session stop "$S" --json >/dev/null 2>&1
+  herdr session delete "$S" --json >/dev/null 2>&1
+  herdr --session "$S" server >> "$VQCC_STATE/logs/herdr-server.out" 2>&1 &
+  local i out
+  for i in $(seq 1 60); do hd workspace list >/dev/null 2>&1 && break; sleep 0.5; done
+  out=$(hd workspace create --cwd "$ROOT" --label vqcc --no-focus) || return 1
+  WS=$(printf '%s' "$out" | jq -r '.result.workspace.workspace_id')
+  hd tab rename "$(printf '%s' "$out" | jq -r '.result.tab.tab_id')" supervisor >/dev/null 2>&1
+  hd pane run "$(printf '%s' "$out" | jq -r '.result.root_pane.pane_id')" \
+    "tail -n 200 -F state/logs/supervisor.log" >/dev/null
+}
+herdr_up || { vqcc_log "supervisor: could not start herdr session $S; exit"; exit 1; }
+
+# Alive = something other than the pane's shell is in the foreground (claude, or the launcher).
+worker_alive() {
+  local p; p=$(wpane "$1"); [ -n "$p" ] || return 1
+  hd pane process-info --pane "$p" 2>/dev/null | \
+    jq -e '.result.process_info | .foreground_process_group_id != .shell_pid' >/dev/null 2>&1
+}
+
+# Save the pane's recent output to state/logs/<prefix>-<worker>-<epoch>.txt.
+snapshot() {  # $1 worker, $2 prefix, $3 lines
+  local p; p=$(wpane "$1"); [ -n "$p" ] || return 0
+  hd pane read "$p" --source recent-unwrapped --lines "$3" > "$VQCC_STATE/logs/$2-$1-$(date +%s).txt" 2>/dev/null
+}
+
+close_worker() {  # interrupt the worker, keep its last screen in the logs, close its tab
+  local w="$1" p t; p=$(wpane "$w"); t=$(cat "$(wfile "$w" tab)" 2>/dev/null)
+  [ -n "$p" ] || return 0
+  hd pane send-keys "$p" esc >/dev/null 2>&1; sleep 1
+  hd pane send-keys "$p" ctrl+c >/dev/null 2>&1; sleep 1
+  hd pane send-keys "$p" ctrl+c >/dev/null 2>&1; sleep 2
+  snapshot "$w" final 300
+  [ -n "$t" ] && hd tab close "$t" >/dev/null 2>&1
+  rm -f "$(wfile "$w" pane)" "$(wfile "$w" tab)"
+}
 
 start_worker() {
-  local w="$1" wdir="$VQCC_STATE/workers/$1" resume_id="" prompt
+  local w="$1" wdir="$VQCC_STATE/workers/$1" resume_id="" out p
   mkdir -p "$wdir" "$ROOT/work/$w"
   rm -f "$wdir/STOP" "$wdir/waiting" "$wdir/continues"
   if [ -s "$wdir/session_id" ] && [ "$(cat "$wdir/night_id" 2>/dev/null)" = "$NIGHT_ID" ]; then
     resume_id="$(cat "$wdir/session_id")"
-    prompt="supervisor により再起動されました (使用量ガードからの再開またはプロセス再起動)。work/$w/NOTES.md と ledger (bin/vqcc-best) で現在地を確認し、続きを進めてください。"
   else
     rm -f "$wdir/session_id"
-    prompt="あなたは VQCC 夜間ワーカー「${w}」です。AGENTS.md を読み、skill optimizing-vqcc-circuits の手順に従って task=${w} の回路最適化を自律的に進めてください。まず work/${w}/NOTES.md (無ければ work/${w}/BRIEF.md と work/BRIEF_OVERVIEW.md) と bin/vqcc-best で現在地を把握してから始めること。"
   fi
   echo "$NIGHT_ID" > "$wdir/night_id"
-  tmux kill-window -t "$S:w-$w" 2>/dev/null
-  # remain-on-exit lets us see how a worker died; pane_dead tells the loop to restart it.
-  if [ -n "$resume_id" ]; then
-    tmux new-window -d -t "$S" -n "w-$w" -c "$ROOT" -e "VQCC_WORKER=$w" -e "VQCC_NIGHT_ID=$NIGHT_ID" \
-      "$VQCC_CLAUDE_BIN" --permission-mode "$VQCC_PERMISSION_MODE" -n "vqcc-$w" --resume "$resume_id" "$prompt"
-  else
-    tmux new-window -d -t "$S" -n "w-$w" -c "$ROOT" -e "VQCC_WORKER=$w" -e "VQCC_NIGHT_ID=$NIGHT_ID" \
-      "$VQCC_CLAUDE_BIN" --permission-mode "$VQCC_PERMISSION_MODE" -n "vqcc-$w" "$prompt"
-  fi
-  tmux set-option -t "$S:w-$w" remain-on-exit on >/dev/null
+  close_worker "$w"
+  out=$(hd tab create --workspace "$WS" --label "w-$w" --cwd "$ROOT" --no-focus) || {
+    vqcc_log "supervisor: herdr tab create failed for $w"; return 1; }
+  p=$(printf '%s' "$out" | jq -r '.result.root_pane.pane_id')
+  printf '%s' "$out" | jq -r '.result.tab.tab_id' > "$wdir/tab"
+  echo "$p" > "$wdir/pane"
+  # The pane runs the user's login shell; the launcher builds the prompt and execs claude.
+  # When claude exits the shell prints a marker and stays, so the last screen can be read.
+  hd pane run "$p" "harness/worker-launch.sh ${w} ${NIGHT_ID} ${resume_id}; echo \"[vqcc] worker exited rc=\$?\"" >/dev/null
   date +%s > "$wdir/started"
   date +%s > "$wdir/heartbeat"
-  vqcc_log "supervisor: started worker $w ${resume_id:+(resume $resume_id)}"
+  vqcc_log "supervisor: started worker $w in $p ${resume_id:+(resume $resume_id)}"
 }
 
 stop_workers() {  # $1 = reason
   local w
-  for w in $VQCC_WORKERS; do
-    if tmux list-windows -t "$S" -F '#{window_name}' 2>/dev/null | grep -qx "w-$w"; then
-      tmux send-keys -t "$S:w-$w" Escape 2>/dev/null; sleep 1
-      tmux send-keys -t "$S:w-$w" C-c 2>/dev/null; sleep 1
-      tmux send-keys -t "$S:w-$w" C-c 2>/dev/null; sleep 2
-      tmux kill-window -t "$S:w-$w" 2>/dev/null
-    fi
-  done
+  for w in $VQCC_WORKERS; do close_worker "$w"; done
   vqcc_log "supervisor: stopped workers ($1)"
 }
 
 nudge() {  # $1 worker, $2 text
-  tmux send-keys -t "$S:w-$1" Escape 2>/dev/null; sleep 1
-  tmux send-keys -t "$S:w-$1" -l "$2" 2>/dev/null; sleep 0.5
-  tmux send-keys -t "$S:w-$1" Enter 2>/dev/null
+  local p; p=$(wpane "$1"); [ -n "$p" ] || return 0
+  hd pane send-keys "$p" esc >/dev/null 2>&1; sleep 1
+  hd pane send-text "$p" "$2" >/dev/null 2>&1; sleep 0.5
+  hd pane send-keys "$p" enter >/dev/null 2>&1
   vqcc_log "supervisor: nudged $1"
 }
 
@@ -135,7 +164,7 @@ while :; do
     if ! worker_alive "$w"; then
       if [ -f "$wdir/STOP" ]; then continue; fi
       rs=$(( $(cat "$wdir/restarts" 2>/dev/null || echo 0) + 1 )); echo "$rs" > "$wdir/restarts"
-      tmux capture-pane -p -S -200 -t "$S:w-$w" > "$VQCC_STATE/logs/dead-$w-$now.txt" 2>/dev/null
+      snapshot "$w" dead 200
       if [ "$rs" -le 6 ]; then
         vqcc_log "supervisor: worker $w not alive, restart #$rs"
         sleep $(( 30 * $rs ))
@@ -146,7 +175,7 @@ while :; do
       continue
     fi
     # Subscription limit message on screen (five_hour is not always present in the status line).
-    if tmux capture-pane -p -t "$S:w-$w" 2>/dev/null | tail -12 | \
+    if hd pane read "$(wpane "$w")" --source visible 2>/dev/null | grep -v '^[[:space:]]*$' | tail -12 | \
        grep -Eqi "hit your (session |weekly |5-hour )?limit|(usage|session|5-hour|weekly) limit (reached|will reset)|limit reached.*resets"; then
       echo "$now" > "$VQCC_STATE/limit_hit"
       vqcc_log "supervisor: limit message in w-$w pane; pausing all workers for 1h"
@@ -163,7 +192,7 @@ while :; do
     # No activity for 40 minutes: the session may be stuck (long tool call is fine, but check).
     hb=$(cat "$wdir/heartbeat" 2>/dev/null || echo "$now")
     if [ $(( now - hb )) -ge 2400 ]; then
-      tmux capture-pane -p -S -60 -t "$S:w-$w" > "$VQCC_STATE/logs/stale-$w-$now.txt" 2>/dev/null
+      snapshot "$w" stale 60
       vqcc_log "supervisor: worker $w no heartbeat for $(( (now - hb) / 60 )) min (snapshot saved)"
       date +%s > "$wdir/heartbeat"
     fi
@@ -182,6 +211,7 @@ while :; do
     if { [ $(( now - LAST_SUBMIT_TRY )) -ge 7200 ] && [ $(( now - START_TS )) -ge 5400 ]; } || \
        { [ "$SUBMITTED_TONIGHT" = 0 ] && [ "$left" -le 15 ]; }; then
       LAST_SUBMIT_TRY=$now
+      "$ROOT/bin/vqcc-model" sync >> "$VQCC_STATE/logs/model.log" 2>&1
       [ "$left" -le 15 ] && SUBMITTED_TONIGHT=1
       "$ROOT/bin/vqcc-submit" --auto >> "$VQCC_STATE/logs/submit.log" 2>&1
       vqcc_log "supervisor: vqcc-submit --auto exit=$? ($(tail -n 1 "$VQCC_STATE/logs/submit.log"))"
@@ -189,7 +219,10 @@ while :; do
   fi
 done
 
+"$ROOT/bin/vqcc-model" sync >> "$VQCC_STATE/logs/model.log" 2>&1
+"$ROOT/bin/vqcc-submit" --sync >> "$VQCC_STATE/logs/submit.log" 2>&1  # Kaggle public LB of our submissions
 "$ROOT/bin/vqcc-report" >> "$VQCC_STATE/logs/report.log" 2>&1
+herdr session stop "$S" --json >/dev/null 2>&1
 vqcc_log "supervisor: night $NIGHT_ID done"
 exit 0
 }

@@ -5,21 +5,21 @@ VQCC_ROOT="${VQCC_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1
 VQCC_STATE="$VQCC_ROOT/state"
 
 # Night window, local time (HHMM). Workers run only inside [start, end).
-VQCC_WINDOW_START="${VQCC_WINDOW_START:-0030}"
-VQCC_WINDOW_END="${VQCC_WINDOW_END:-0730}"
+VQCC_WINDOW_START="${VQCC_WINDOW_START:-0000}"
+VQCC_WINDOW_END="${VQCC_WINDOW_END:-0800}"
 # Minutes before window end when workers are told to wrap up (write notes, finish runs).
 VQCC_WRAPUP_MIN="${VQCC_WRAPUP_MIN:-20}"
 
 # Claude subscription guard: stop all workers when the 5h window usage reaches this (%).
 VQCC_FIVE_HOUR_LIMIT="${VQCC_FIVE_HOUR_LIMIT:-90}"
 # Also stop when the 7-day usage reaches this (%), to leave the user's weekly budget alone.
-VQCC_SEVEN_DAY_LIMIT="${VQCC_SEVEN_DAY_LIMIT:-90}"
+VQCC_SEVEN_DAY_LIMIT="${VQCC_SEVEN_DAY_LIMIT:-80}"
 # After a 5h stop, resume workers once the window has reset (if still inside the night window).
 VQCC_RESUME_AFTER_RESET="${VQCC_RESUME_AFTER_RESET:-1}"
 
 # Workers to run (one interactive Claude Code session per task).
 VQCC_WORKERS="${VQCC_WORKERS:-invsqrt dqi dfthcsos}"
-VQCC_TMUX_SESSION="${VQCC_TMUX_SESSION:-vqcc}"
+VQCC_HERDR_SESSION="${VQCC_HERDR_SESSION:-vqcc}"  # herdr named session (attach: herdr --session vqcc)
 VQCC_CLAUDE_BIN="${VQCC_CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")}"
 VQCC_PERMISSION_MODE="${VQCC_PERMISSION_MODE:-auto}"
 
@@ -27,8 +27,9 @@ VQCC_PERMISSION_MODE="${VQCC_PERMISSION_MODE:-auto}"
 VQCC_MAX_SUBMITS_PER_DAY="${VQCC_MAX_SUBMITS_PER_DAY:-4}"
 VQCC_COMPETITION="google-verifiable-quantum-circuit-compilation"
 
-# Obsidian daily-note logging of the morning report (empty = disabled).
-VQCC_OBSIDIAN_APPEND="${VQCC_OBSIDIAN_APPEND:-$HOME/.claude/skills/obsidian-daily/scripts/append_log.sh}"
+# Obsidian daily-note logging of the morning report: off by default. To enable, set it to the
+# obsidian-daily append_log.sh path in state/config.local.sh.
+VQCC_OBSIDIAN_APPEND="${VQCC_OBSIDIAN_APPEND:-}"
 
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/run/current-system/sw/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 

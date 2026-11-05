@@ -89,14 +89,17 @@ After every evaluated candidate:
 1. Update NOTES.md: move the item from "進行中" to "試したこと" with cand_id, tier, status, score,
    ratio and one line of insight; update "現在のベスト" when a full/remote PASS improves it;
    rewrite "次にやること" (top 5, ranked).
-2. Commit: `git -C work add -A && git -C work commit -q -m "<task>: <what changed>"`.
+2. When a candidate enters "現在のベスト" (full/remote PASS on two salts), snapshot it with its generator:
+   `bin/vqcc-model save <task> <path> --src work/<task>/src --cmd "<regenerate command>" --note "<what changed>"`.
+   `bin/vqcc-model list <task>` shows the versions (v1, v2, …), their verified ratio and their Kaggle public LB.
+3. Commit: `git -C work add -A && git -C work commit -q -m "<task>: <what changed>"`.
 
 ## Rules that override convenience
 
 - Correct circuits only. Never exploit verifier gaps (unchecked subspaces, seed/salt-specific luck,
   behaviour tuned to the test shots). The LB re-verifies with a secret salt and hosts audit winners.
 - Never submit to Kaggle, push, read `~/.kaggle/`, or edit `data/`, `ledger/`, `harness/`, `bin/`, `.claude/`,
-  `AGENTS.md`. Write harness problems to `work/HARNESS_ISSUES.md` and continue with a workaround.
+  `AGENTS.md`, `models/` (write it only through `bin/vqcc-model save`). Write harness problems to `work/HARNESS_ISSUES.md` and continue with a workaround.
 - Nobody answers questions at night. When stuck for more than ~45 minutes on one idea, write down why
   and switch to the next idea.
 - When the Stop hook says the window is closing, start nothing new: collect running results, update

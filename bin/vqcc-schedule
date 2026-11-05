@@ -99,6 +99,10 @@ case "${1:-status}" in
       echo "launchctl bootstrap failed"; exit 1
     fi
     vqcc_log "schedule: started (daily $VQCC_WINDOW_START)"
+    # When the night's report is ready (window end + 20 min: workers wrap up, report is written).
+    # The /vqcc-night skill schedules a daily `/vqcc-night status` at this time.
+    mm=$(( ($(_hhmm_to_min "$VQCC_WINDOW_END") + 20) % 1440 ))
+    printf 'morning  : %02d:%02d (cron "%d %d * * *")\n' $((mm / 60)) $((mm % 60)) $((mm % 60)) $((mm / 60))
     if [ -n "$p" ]; then
       echo "a night is already running (supervisor pid $p)"
     elif vqcc_in_window; then

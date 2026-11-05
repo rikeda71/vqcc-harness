@@ -23,9 +23,9 @@ claude                       # 一度対話起動して workspace trust を承�
 
 | コマンド | 動作 |
 |---|---|
-| `/vqcc-night` | 毎晩の実行を登録する。ウィンドウ内 (00:00–08:00) なら今夜の分を即開始、それ以外は次の 00:00 から |
+| `/vqcc-night` | 毎晩の実行を登録する。ウィンドウ内 (00:00–08:00) なら今夜の分を即開始、それ以外は次の 00:00 から。止め方・status の見方を案内し、そのセッションに毎朝 08:20 頃の `/vqcc-night status` を予約する (セッション限定・7 日で失効、再実行で更新) |
 | `/vqcc-night status` | 登録状態・実行中か・前夜の成果 |
-| `/vqcc-night stop` | 登録を解除する。実行中の夜は約 5 分で片付けて終了 (レポートは書く) |
+| `/vqcc-night stop` | 登録を解除する。実行中の夜は約 5 分で片付けて終了 (レポートは書く)。朝の status 予約も消す |
 
 supervisor は launchd (`~/Library/LaunchAgents/com.rikeda71.vqcc-harness.plist`) から起動されるので、
 skill を実行した claude セッションを閉じても、Mac を再起動しても止まらない。中身は `bin/vqcc-schedule start|stop|status`。

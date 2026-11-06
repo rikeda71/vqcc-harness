@@ -52,11 +52,14 @@ start a genuinely new structural idea, or park:
 
 1. Continue only with an idea that is not in the directive and not a variant of a stopped item, that
    changes the dominant cost term of the current best, and that you estimate at ≥ 3% ratio gain with a
-   concrete spike plan. Record it in NOTES.md "指令との差分" (idea, expected gain, stop rule) and run it
-   like a directive item. Otherwise park.
-2. To park: first collect every in-flight verification of this task (`bin/vqcc-remote status`, local
-   background runs) into the ledger and NOTES. Then write `work/<task>/IDLE` with the time, one line
-   per exhausted item (its result), and up to 3 structural ideas for the strategist with expected gain.
+   concrete spike plan (a first candidate you can build and quick-test within ~2 h, plus a stop rule).
+   Record it in NOTES.md "指令との差分" (idea, expected gain, stop rule) and run it like a directive
+   item. Otherwise park: hand an idea that needs more design to the strategist through IDLE.
+2. To park: record finished results (`bin/vqcc-remote status`, local logs) in NOTES. Do not wait for
+   jobs still running: put their job ids / log paths in NOTES "進行中" and in IDLE (the supervisor polls
+   remote jobs into the ledger; read them when you wake). Then write `work/<task>/IDLE` with the time
+   (`YYYY-MM-DD HH:MM`), one line per exhausted item (its result), running jobs, and up to 3 structural
+   ideas for the strategist with expected ratio gain.
    Update NOTES.md 現在地 ("parked: DIRECTIVE 消化済み, 新指令待ち") and commit.
 3. Start this wait with Bash `run_in_background: true` (absolute paths):
    `until [ ! -f <root>/work/<task>/IDLE ] || [ <root>/work/<task>/DIRECTIVE.md -nt <root>/work/<task>/IDLE ]; do sleep 60; done; echo DIRECTIVE updated`

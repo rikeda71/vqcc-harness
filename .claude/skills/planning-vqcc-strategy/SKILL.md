@@ -124,7 +124,8 @@ its structural ideas) and waits without using tokens; the supervisor brings this
 happens. Any write to that task's DIRECTIVE.md wakes the worker. For a parked task choose one:
 - **New RESTRUCTURE**: a genuinely different structure (not a re-tune or variant of an exhausted item)
   that attacks the dominant cost term, with expected gain ≥ ~3% and a spike stop rule. Use the
-  worker's ideas in IDLE when they qualify. Then write the directive as usual.
+  worker's ideas in IDLE when they qualify. Then write the directive as usual. When the spike's stop
+  rule fires and no TUNE item is worth it, its fallback is "park again" (not re-tuning).
 - **PARK**: nothing qualifies, or the task's gain per hour is far below the others'. Do not write that
   task's DIRECTIVE.md at all (even an identical rewrite wakes the worker); record "PARK — <reason>" in
   STRATEGY.md タスク別配分 and in the log. Do not issue HOLD for a parked task: HOLD keeps a session
@@ -138,7 +139,9 @@ happens. Any write to that task's DIRECTIVE.md wakes the worker. For a parked ta
    the mode), 今回の判断と根拠, 要人間判断. Start the file with a timestamp and the standing
    `leaderboard_csv` path.
 2. `work/<task>/DIRECTIVE.md` for each task in `VQCC_WORKERS` except tasks you keep PARKed (Step 4),
-   overwritten each pass, using this template:
+   overwritten each pass, using this template. Exception: in a pass brought forward by a parked worker,
+   leave a running task's directive untouched when your decision for it is unchanged (say so in
+   STRATEGY.md), so its work is not interrupted.
 
    ```markdown
    # DIRECTIVE <task> — <YYYY-MM-DD HH:MM> (strategist)

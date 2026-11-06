@@ -52,6 +52,8 @@ Legitimacy audit before verifying any circuit (own or public): it must be correc
 register contract, not only on states the verifier happens to reach. Items marked FORBIDDEN or グレー in
 BRIEF.md / BRIEF_OVERVIEW.md override any recommendation elsewhere in the briefs; when in doubt (gray
 area, host ruling pending), do not use the technique and note it in NOTES.md "知見".
+Exception: when the task's BRIEF.md states a human-decided failure-rate policy (dqi: §6, rare failures with true
+rate ≲1e-5 under the input distribution are allowed), apply that policy instead of "correct on every input".
 Audit concretely: simulate the circuit (or its loader) on every address including out-of-range ones and
 on arbitrary initial target words, and check outputs and phases against the contract in the task's
 BRIEF.md; keep the audit script in `work/<task>/src/` and reuse it. If a public circuit fails the audit,

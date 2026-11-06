@@ -39,7 +39,7 @@ VQCC_CLAUDE_BIN="${VQCC_CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bi
 VQCC_PERMISSION_MODE="${VQCC_PERMISSION_MODE:-auto}"
 
 # Submissions: Kaggle allows 5/day (UTC); the harness uses at most this many.
-VQCC_MAX_SUBMITS_PER_DAY="${VQCC_MAX_SUBMITS_PER_DAY:-4}"
+VQCC_MAX_SUBMITS_PER_DAY="${VQCC_MAX_SUBMITS_PER_DAY:-5}"
 VQCC_COMPETITION="google-verifiable-quantum-circuit-compilation"
 VQCC_TEAM_NAME="${VQCC_TEAM_NAME:-ikechan}"  # our team name on the leaderboard (bin/vqcc-standing)
 # Target for the strategist: gold | silver | bronze | <score>; empty = the next medal line above us.

@@ -50,7 +50,7 @@ OUT = ROOT / "submissions"
 MODELS = ROOT / "models"
 SAMPLE = ROOT / "data" / "raw" / "sample_submission"
 COMP = os.environ.get("VQCC_COMPETITION", "google-verifiable-quantum-circuit-compilation")
-MAX_PER_DAY = int(os.environ.get("VQCC_MAX_SUBMITS_PER_DAY", "4"))
+MAX_PER_DAY = int(os.environ.get("VQCC_MAX_SUBMITS_PER_DAY", "5"))
 MIN_GAIN = 1e-4
 MSG_RE = re.compile(r"vqcc-harness pred=([0-9.]+)\s+(.*)")
 

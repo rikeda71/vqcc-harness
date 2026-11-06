@@ -65,7 +65,7 @@ VQCC_WINDOW_END=0800
 VQCC_WORKERS="invsqrt dqi dfthcsos"
 VQCC_FIVE_HOUR_LIMIT=90         # Claude 5 時間枠の使用率 (%) で全ワーカー停止
 VQCC_SEVEN_DAY_LIMIT=90         # 7 日枠 (日中の利用分を残す)
-VQCC_MAX_SUBMITS_PER_DAY=4
+VQCC_MAX_SUBMITS_PER_DAY=5
 VQCC_ROTATE_TOKENS=120000       # ワーカーのコンテキストがこれを超えたら新セッションに切り替え
 VQCC_OBSIDIAN_APPEND=1          # 朝レポートを Obsidian daily に追記 (既定オフ)
 VQCC_STRATEGY_INTERVAL_MIN=240  # 作戦会議 (strategist) の間隔。0 で無効
@@ -102,7 +102,7 @@ VQCC_TEAM_NAME=ikechan          # LB 上のチーム名
   2. 予測 LB が過去提出の予測と実際の public LB の最大値を上回る
   3. 前回提出が採点中でない
   4. `state/SUBMIT_BLOCKED` が無い (Kaggle で ERROR、または LB が予測より 5% 以上低いと自動作成される)
-  5. 1 日 4 回まで (残り 1 回は手動用)
+  5. 1 日 5 回まで (Kaggle の上限, UTC 日単位)
 
   提出ファイルは `submissions/<UTC 時刻>/submission.zip` (この競技はファイル名が `submission.zip` 以外だと 400 で拒否される)。
   毎回の試行は `state/submissions.jsonl` に残り、`kaggle competitions submit` 自体が失敗したときは exit 1。

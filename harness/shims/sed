@@ -1,0 +1,17 @@
+#!/bin/bash
+# sed shim for night workers (harness/worker-env.sh puts this dir first in PATH).
+# The user's PATH resolves sed to GNU sed, but Claude often writes the BSD form `sed -i '' ...`, which
+# GNU sed reads as "edit the file named ''". Route that form to /usr/bin/sed (BSD) and everything else
+# to the next sed in PATH (GNU), so both spellings work.
+self_dir="$(cd "$(dirname "$0")" && pwd -P)"
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "-i" ] && [ -z "$a" ]; then exec /usr/bin/sed "$@"; fi
+  prev="$a"
+done
+IFS=: read -r -a dirs <<< "$PATH"
+for d in "${dirs[@]}"; do
+  [ "$(cd "$d" 2>/dev/null && pwd -P)" = "$self_dir" ] && continue
+  [ -x "$d/sed" ] && exec "$d/sed" "$@"
+done
+exec /usr/bin/sed "$@"

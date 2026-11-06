@@ -9,6 +9,8 @@ ROOT="$(cd "$(dirname "$0")/.." >/dev/null 2>&1 && pwd -P)"
 . "$ROOT/harness/config.sh"
 w="$1"; night="$2"; resume_id="${3:-}"
 export VQCC_WORKER="$w" VQCC_NIGHT_ID="$night"
+# Shell fixes for every Bash tool call (unalias date, sed shim): see harness/worker-env.sh.
+export VQCC_ROOT="$ROOT" CLAUDE_ENV_FILE="$ROOT/harness/worker-env.sh"
 
 if [ "$w" = strategist ]; then
   prompt="あなたは VQCC 作戦参謀 (strategist) です。AGENTS.md (特に「作戦参謀」節) を読み、skill planning-vqcc-strategy の手順に従って作戦会議を 1 回行ってください: 順位とメダル/目標までの距離の把握、上位手法の推定、目標からの逆算、タスクごとの方針 (チューニング継続か抜本的な構造変更か) の決定、work/STRATEGY.md と各タスクの work/<task>/DIRECTIVE.md の更新。回路の作成・検証はしません。人間は見ていないので確認や質問はせず自分で判断すること。書き終えたら work/ をコミットし、短く報告して停止してください。"

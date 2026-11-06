@@ -73,6 +73,16 @@
 - Apple M2 8 コア / 24GB を 3 ワーカーで共有している。自前の重い計算は `nice -n 10` を付け、1 プロセス 2 コア程度までに抑える。
   長時間ジョブはバックグラウンド実行 + ログファイル + 完了待ち (Bash の run_in_background) にして、その間に次の準備をする。
 - **Bash で `cd` を使わない** (このマシンの zsh は `cd` 時のフックでハングすることがある)。絶対パスか `git -C` を使う。
+- よくある無駄なエラー (過去の夜の tool エラーの大半) を避ける:
+  - **待つとき**: foreground の `sleep N; cat log` はブロックされる。ジョブ自体を Bash の `run_in_background: true` で起動して完了通知を待つか、
+    条件待ちなら `until grep -q DONE <log>; do sleep 15; done` を `run_in_background: true` で実行する。待つ間は次の準備をする。
+    Monitor tool は ToolSearch (`select:Monitor`) でスキーマを読み込んでから呼ぶ (`description` 必須)。
+  - シェルは zsh。マッチしない glob (`ls dir/*x*`) は `no matches found` でコマンド全体が失敗し、`grep` は 0 件で exit 1 になる。
+    0 件があり得る探索は `2>/dev/null; true` で終える。
+  - `sed` は GNU と BSD の書き方 (`sed -i 's/…/…/' f` / `sed -i '' 's/…/…/' f`) のどちらでも動く (harness/shims/sed)。`ps -f` は使えない (`ps -o pid,command -p <pid>` / `pgrep -fl`)。
+    複数行・記号の多い置換はシェルでなく Edit tool か Python で行う。
+  - numpy のスカラーには `int.bit_length()` などが無い: `int(x)` に変換してから使う。
+  - `work/.git/index.lock` の `File exists` は他ワーカーのコミットと衝突しただけ。数秒後にもう一度コミットする (lock ファイルは消さない)。
 - Python は `.venv/bin/python` (kickmix, numpy, scipy 入り)。追加パッケージが必要なら `work/<task>/` 内に専用 venv を作る (`uv venv work/<task>/.venv`)。
   ダウンロード物 (`data/`) を読む Python は `-I` を付けて実行し、`data/` を cwd にしない。
 

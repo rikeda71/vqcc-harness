@@ -46,6 +46,8 @@ skill を実行した claude セッションを閉じても、Mac を再起動�
 | ウィンドウ外で手動起動 | `bin/night-supervisor --force` (自動提出はしない) |
 | 毎日の成果 | 朝に macOS 通知。`reports/DAILY.md` (1 夜 1 行の推移) / `reports/<night_id>.md` (詳細) / `/vqcc-night status` |
 | タスクごとのベストと予測 LB | `bin/vqcc-best` |
+| 順位・メダル線までの距離 | `bin/vqcc-standing` (公開 LB を取得し、目標に必要な ratio 倍率を表示) |
+| 作戦会議を手動で開く | `claude` で「作戦会議して」(skill `planning-vqcc-strategy`)。結果は `work/STRATEGY.md` と `work/<task>/DIRECTIVE.md` |
 | 採用回路の版一覧 (ratio・Kaggle LB) | `bin/vqcc-model list` |
 | Kaggle 提出履歴と public LB | `bin/vqcc-submit --sync` |
 | 次に提出される内容の確認 | `bin/vqcc-submit` (`--auto --dry-run` で提出条件も判定) |
@@ -66,6 +68,10 @@ VQCC_SEVEN_DAY_LIMIT=80         # 7 日枠 (日中の利用分を残す)
 VQCC_MAX_SUBMITS_PER_DAY=4
 VQCC_ROTATE_TOKENS=120000       # ワーカーのコンテキストがこれを超えたら新セッションに切り替え
 VQCC_OBSIDIAN_APPEND=1          # 朝レポートを Obsidian daily に追記 (既定オフ)
+VQCC_STRATEGY_INTERVAL_MIN=240  # 作戦会議 (strategist) の間隔。0 で無効
+VQCC_STRATEGY_TIMEOUT_MIN=45    # 1 回の作戦会議の上限時間
+VQCC_TARGET=                    # 目標: gold|silver|bronze|<score>。空 = 1 つ上のメダル線
+VQCC_TEAM_NAME=ikechan          # LB 上のチーム名
 ```
 
 ## 仕組み
@@ -74,8 +80,17 @@ VQCC_OBSIDIAN_APPEND=1          # 朝レポートを Obsidian daily に追記 (�
   Kaggle 上のリモート検証の回収と Kaggle 疎通・締切の確認 (10 分ごと)、自動提出、朝レポート。
 - **コンテキスト管理**: ワーカーのコンテキストが `VQCC_ROTATE_TOKENS` を超えると、Stop hook が NOTES.md への引き継ぎと
   コミットを指示し、supervisor が新しいセッション (`--resume` なし) で起動し直す。auto-compaction を起こさないため。
+- **作戦参謀 (strategist)**: 夜の開始時と `VQCC_STRATEGY_INTERVAL_MIN` ごとに、回路を作らない Claude セッション
+  (herdr タブ `strategist`) を 1 回起動する。順序は次のとおり。
+  1. `bin/vqcc-standing` で順位、メダル線、目標までの倍率、タスク別の進捗速度、締切を測る。
+  2. 公開ノートブックと各ワーカーの NOTES から上位の手法を推定する。
+  3. 目標から逆算して、タスクごとの目標 ratio と方針 (TUNE / RESTRUCTURE / IMPORT / HOLD) を決める。
+  4. `work/STRATEGY.md` と `work/<task>/DIRECTIVE.md` を書く。
+
+  ワーカーは起動時に DIRECTIVE を読む。途中で更新されると hook (`activity.sh`) から通知が届き、指令に沿って計画を組み替える。
+  指令から外れる場合は、根拠を NOTES の「指令との差分」に書く。朝レポートには順位とメダル線の表が入る。
 - **ワーカー**: `AGENTS.md` と `.claude/skills/` (`optimizing-vqcc-circuits` / `evaluating-vqcc-candidates` /
-  `gathering-vqcc-intel`) に従い、`work/<task>/` で回路を作る。背景知識は `docs/intel/kaggle-vqcc-primer.md`
+  `gathering-vqcc-intel`) と DIRECTIVE に従い、`work/<task>/` で回路を作る。背景知識は `docs/intel/kaggle-vqcc-primer.md`
   (束野「Google Quantum AI の Kaggle コンペ基礎知識」, CC BY 4.0, https://zenodo.org/records/23875845 の要約)。
 - **評価**: `bin/vqcc-verify` (ローカル quick / full) と `bin/vqcc-remote` (Kaggle CPU notebook) が公式 verifier を走らせ、
   結果を `ledger/results.jsonl` に追記。候補は内容ハッシュで `artifacts/` に固定される。

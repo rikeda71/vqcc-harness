@@ -44,6 +44,27 @@ def main() -> int:
     pred = math.exp(sum(math.log(v) for v in ratios.values()) / 3)
     lines += ["", f"**predicted LB (geometric mean): {pred:.4f}**", ""]
 
+    # Leaderboard standing (bin/vqcc-standing, run by the supervisor just before this report).
+    sj = STATE / "standing.json"
+    if sj.exists():
+        st = json.loads(sj.read_text())
+        lines += ["## Leaderboard standing (bin/vqcc-standing)", "",
+                  f"- {st['ts']}: {st['teams']} teams, us {st.get('our_public_lb')} → rank {st.get('our_rank')}"
+                  + (f" (top {st['our_percentile']:.1f}%)" if st.get("our_percentile") else "")
+                  + (f", {st['days_left']:.1f} days left" if st.get("days_left") else ""), "",
+                  "| line | rank | score | x product | one task alone (invsqrt / dqi / dfthcsos) |", "|---|---|---|---|---|"]
+        for m in ("bronze", "silver", "gold", "rank1"):
+            g = st["targets"].get(m)
+            if g:
+                rk = st["medal_lines"][m]["rank"] if m in st["medal_lines"] else 1
+                lines.append(f"| {m}{' ←' if m == st.get('primary_target') else ''} | {rk} | {g['target_score']:.5f} | "
+                             f"{g['product_multiplier']:.4f} | "
+                             + " / ".join(f"{g['one_task_alone_ratio'][t]:.3f}" for t in ledger.TASKS) + " |")
+        lines.append("")
+    strat = ROOT / "work" / "STRATEGY.md"
+    if strat.exists():
+        lines += ["## work/STRATEGY.md (head)", "", *strat.read_text().splitlines()[:40], ""]
+
     lines += ["## Tonight's best quick/full results per task", ""]
     for t in ledger.TASKS:
         tr = [r for r in recs if r["task"] == t and r["status"] == "PASS" and r.get("score")]

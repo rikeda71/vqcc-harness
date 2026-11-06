@@ -20,12 +20,28 @@
 - 作業場所は `work/<task>/` だけ (例外: 全ワーカー共有の追記用ファイル `work/INTEL_INDEX.md`, `work/HARNESS_ISSUES.md`, `work/BRIEF_OVERVIEW.md` の「ルール解釈」節)。ソースは `work/<task>/src/`、生成物は `work/<task>/out/`、メモは `work/<task>/NOTES.md`。
   `work/` はローカル専用の git リポジトリ (公開しない)。実験の区切りごとに `git -C work add -A && git -C work commit -m "<task>: ..."`。
 
+## 作戦参謀 (strategist) と指令 (DIRECTIVE)
+
+- supervisor は、夜の開始時と `VQCC_STRATEGY_INTERVAL_MIN` (既定 240 分) ごとに、回路を作らないセッション `VQCC_WORKER=strategist` を 1 回だけ起動する。
+- strategist は skill `planning-vqcc-strategy` に従って次の順に進める。
+  1. 順位とメダル・目標までの距離を `bin/vqcc-standing` で測る。
+  2. 上位の手法を推定する。
+  3. 目標から逆算し、タスクごとの目標 ratio と方針 (TUNE / RESTRUCTURE / IMPORT / HOLD) を決める。
+  4. `work/STRATEGY.md` と各タスクの `work/<task>/DIRECTIVE.md` を書く。
+- strategist が書いてよいのは、`work/STRATEGY.md`、`work/<task>/DIRECTIVE.md`、`work/strategy/` 以下、共有の追記用ファイルだけ。
+  - 回路の作成・検証はしない。
+  - 各タスクの NOTES.md・BRIEF.md・BLOCKLIST には書かない。
+- ワーカーは DIRECTIVE.md を最優先の計画として扱う (skill `optimizing-vqcc-circuits` Step 2)。
+  - ただし、AGENTS.md・BRIEF の禁止事項・人間の判断・BLOCKLIST は指令より常に優先する。
+  - ledger や監査の証拠に基づいて指令から外れる場合は、NOTES.md「指令との差分」に根拠を書く。
+
 ## 評価 (必ず harness のツールを使う)
 
 - `bin/vqcc-verify <task> <candidate> --tier quick --label "<何を試したか>"` : 数分の高速チェック。足切り用。
 - `bin/vqcc-verify <task> <candidate> --tier full --label ...` : 公式 verifier を公式既定値で実行 (LB と同じ判定)。ローカル CPU は全ワーカー共有でロック制御される。
 - `bin/vqcc-remote submit <task> <candidate> --label ...` : Kaggle の CPU notebook で公式 verifier を実行 (LB と同じ kickmix)。**full 検証は可能ならこちらを優先** (Mac の CPU を空けられる)。結果は supervisor が定期的に `bin/vqcc-remote poll` で回収し ledger に入る。自分で `poll`/`status` を呼んでもよい。
 - `bin/vqcc-best` : 各タスクの verified best と予測 LB を表示。
+- `bin/vqcc-standing` : 公開 LB での順位・メダル線・目標までに必要な倍率を表示する (`--no-download` を付けるとキャッシュを使う)。
 - `bin/vqcc-model save <task> <candidate> --src work/<task>/src --cmd "<再生成コマンド>" --note "<変更点>"` :
   「現在のベスト」になった候補を生成コードごと `models/<task>/v<N>/` に版として保存する。`bin/vqcc-model list` で
   各版の verified ratio と Kaggle の public LB (提出済みなら) を確認できる。`models/<task>/current` が次の提出に使われる版。

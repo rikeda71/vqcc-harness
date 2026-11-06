@@ -125,6 +125,8 @@ start_worker() {  # $1 worker, $2 = "fresh" for a new session after a context ro
     rm -f "$wdir/session_id"
   fi
   echo "$NIGHT_ID" > "$wdir/night_id"
+  # The worker reads DIRECTIVE.md at session start; activity.sh announces only later updates.
+  [ -f "$ROOT/work/$w/DIRECTIVE.md" ] && /usr/bin/stat -f %m "$ROOT/work/$w/DIRECTIVE.md" > "$wdir/directive_seen"
   close_worker "$w"
   out=$(hd tab create --workspace "$WS" --label "w-$w" --cwd "$ROOT" --no-focus) || {
     vqcc_log "supervisor: herdr tab create failed for $w"; return 1; }
@@ -139,9 +141,51 @@ start_worker() {  # $1 worker, $2 = "fresh" for a new session after a context ro
   vqcc_log "supervisor: started worker $w in $p ${resume_id:+($resume_id)}"
 }
 
+# Strategist ("作戦会議"): a separate, non-circuit Claude session that reads the standing
+# (bin/vqcc-standing), every task's progress and public intel, then rewrites work/STRATEGY.md and
+# work/<task>/DIRECTIVE.md (skill planning-vqcc-strategy). Runs at night start and every
+# VQCC_STRATEGY_INTERVAL_MIN; its Stop hook ends it after one pass (state/workers/strategist/done).
+STRAT=strategist
+start_strategist() {
+  local wdir="$VQCC_STATE/workers/$STRAT" out p
+  mkdir -p "$wdir"; rm -f "$wdir/done" "$wdir/waiting" "$wdir/stop_reason" "$wdir/sent_back"
+  close_worker "$STRAT"
+  "$ROOT/bin/vqcc-standing" > "$VQCC_STATE/logs/standing.log" 2>&1 || vqcc_log "supervisor: vqcc-standing failed ($(tail -n 1 "$VQCC_STATE/logs/standing.log"))"
+  out=$(hd tab create --workspace "$WS" --label "$STRAT" --cwd "$ROOT" --no-focus) || {
+    vqcc_log "supervisor: herdr tab create failed for $STRAT"; return 1; }
+  p=$(printf '%s' "$out" | jq -r '.result.root_pane.pane_id')
+  printf '%s' "$out" | jq -r '.result.tab.tab_id' > "$wdir/tab"
+  echo "$p" > "$wdir/pane"
+  hd pane run "$p" "harness/worker-launch.sh ${STRAT} ${NIGHT_ID}; echo \"[vqcc] strategist exited rc=\$?\"" >/dev/null
+  date +%s > "$wdir/started"; date +%s > "$wdir/heartbeat"
+  vqcc_log "supervisor: started strategist in $p"
+}
+strategy_tick() {  # $1 = now
+  [ "$VQCC_STRATEGY_INTERVAL_MIN" -gt 0 ] 2>/dev/null || return 0
+  local wdir="$VQCC_STATE/workers/$STRAT" st wts wtype
+  if [ -n "$(wpane "$STRAT")" ]; then
+    st=$(cat "$wdir/started" 2>/dev/null || echo "$1")
+    if [ -f "$wdir/done" ]; then
+      vqcc_log "supervisor: strategist done after $(( ($1 - st) / 60 )) min"; close_worker "$STRAT"
+    elif ! worker_alive "$STRAT"; then
+      vqcc_log "supervisor: strategist exited"; snapshot "$STRAT" dead 200; close_worker "$STRAT"
+    elif [ $(( $1 - st )) -ge $(( VQCC_STRATEGY_TIMEOUT_MIN * 60 )) ]; then
+      vqcc_log "supervisor: strategist timed out after $VQCC_STRATEGY_TIMEOUT_MIN min"; close_worker "$STRAT"
+    elif [ -f "$wdir/waiting" ]; then
+      read -r wts wtype < "$wdir/waiting"
+      if [ $(( $1 - wts )) -ge 180 ]; then
+        rm -f "$wdir/waiting"
+        nudge "$STRAT" "(supervisor) 承認者はいません。拒否されたものとして扱い、許可された手段で作戦会議を完了し、STRATEGY.md と DIRECTIVE.md を書いて停止してください。"
+      fi
+    fi
+  elif [ $(( $1 - STRAT_LAST )) -ge $(( VQCC_STRATEGY_INTERVAL_MIN * 60 )) ] && [ "$(vqcc_min_to_end)" -gt 60 ]; then
+    STRAT_LAST=$1; start_strategist
+  fi
+}
+
 stop_workers() {  # $1 = reason
   local w
-  for w in $VQCC_WORKERS; do close_worker "$w"; done
+  for w in $VQCC_WORKERS $STRAT; do close_worker "$w"; done
   vqcc_log "supervisor: stopped workers ($1)"
 }
 
@@ -153,7 +197,7 @@ nudge() {  # $1 worker, $2 text
   vqcc_log "supervisor: nudged $1"
 }
 
-PAUSED=0; LAST_POLL=0; KFAIL=0; END_REASON=""; SUBMITTED_TONIGHT=0; LAST_SUBMIT_TRY=0; START_TS=$(date +%s)
+STRAT_LAST=0; PAUSED=0; LAST_POLL=0; KFAIL=0; END_REASON=""; SUBMITTED_TONIGHT=0; LAST_SUBMIT_TRY=0; START_TS=$(date +%s)
 for w in $VQCC_WORKERS; do mkdir -p "$VQCC_STATE/workers/$w"; echo 0 > "$VQCC_STATE/workers/$w/restarts"; done
 
 if vqcc_over_limit; then
@@ -242,6 +286,8 @@ while :; do
     fi
   done
 
+  strategy_tick "$now"
+
   # Every 10 minutes: is the competition still on and Kaggle reachable? Then poll remote jobs.
   if [ $(( now - LAST_POLL )) -ge 600 ]; then
     LAST_POLL=$now
@@ -277,6 +323,7 @@ done
 
 "$ROOT/bin/vqcc-model" sync >> "$VQCC_STATE/logs/model.log" 2>&1
 "$ROOT/bin/vqcc-submit" --sync >> "$VQCC_STATE/logs/submit.log" 2>&1  # Kaggle public LB of our submissions
+"$ROOT/bin/vqcc-standing" > "$VQCC_STATE/logs/standing.log" 2>&1  # rank / medal gap for the report
 "$ROOT/bin/vqcc-report" >> "$VQCC_STATE/logs/report.log" 2>&1
 herdr session stop "$S" --json >/dev/null 2>&1
 vqcc_log "supervisor: night $NIGHT_ID done"

@@ -14,6 +14,22 @@ date +%s > "$wdir/last_stop"
 
 allow() { vqcc_log "stop-hook[$worker]: allow stop ($1)"; echo "$1" > "$wdir/stop_reason"; exit 0; }
 
+# The strategist does one planning pass per session: let it end and tell the supervisor it is done.
+# If it stops before writing work/STRATEGY.md this pass (e.g. ended a turn to wait for a background
+# command), send it back once; the supervisor's timeout still bounds the pass.
+if [ "$worker" = strategist ]; then
+  st=$(cat "$wdir/started" 2>/dev/null || echo 0)
+  sm=$(/usr/bin/stat -f %m "$ROOT/work/STRATEGY.md" 2>/dev/null || echo 0)
+  if [ "$sm" -lt "$st" ] && [ ! -f "$wdir/sent_back" ] && ! [ -f "$VQCC_STATE/STOP" ]; then
+    date +%s > "$wdir/sent_back"
+    vqcc_log "stop-hook[$worker]: STRATEGY.md not written yet, sending back once"
+    jq -n --arg r "work/STRATEGY.md がまだ今回の pass で更新されていません。skill planning-vqcc-strategy の Step 5 (STRATEGY.md・各 DIRECTIVE.md・strategy/log.md の書き込みと work/ のコミット) を完了してから短く報告して停止してください。バックグラウンド処理を待つ必要はありません。" \
+      '{decision: "block", reason: $r}'
+    exit 0
+  fi
+  date +%s > "$wdir/done"; allow "strategist pass finished"
+fi
+
 [ -f "$VQCC_STATE/STOP" ] && allow "STOP file present"
 [ -f "$wdir/STOP" ] && allow "worker STOP file present"
 vqcc_in_window || allow "outside night window"

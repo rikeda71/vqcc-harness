@@ -20,7 +20,8 @@ For public notebooks and discussions, use skill `gathering-vqcc-intel`.
 ## Step 1: Resume (every session start or restart)
 
 1. Read `$VQCC_WORKER` to know the task. Work only in `work/<task>/`.
-2. Read, in this order, whatever exists: `work/<task>/NOTES.md`, `work/<task>/BRIEF.md`,
+2. Read, in this order, whatever exists: `work/<task>/DIRECTIVE.md` (the strategist's current orders,
+   see Step 2), `work/<task>/NOTES.md`, `work/<task>/BRIEF.md`,
    `work/BRIEF_OVERVIEW.md`, `work/HARNESS_ISSUES.md`. On your first session (or when NOTES.md does not
    mention it yet), also read `docs/intel/kaggle-vqcc-primer.md` (cost tables, score trade-offs, verifier
    behaviour, invsqrt approximation from an external guide) and note in NOTES.md which ideas apply.
@@ -30,8 +31,21 @@ For public notebooks and discussions, use skill `gathering-vqcc-intel`.
 
 ## Step 2: Choose the next experiment
 
-Pick from "次にやること" in NOTES.md, ranked by (expected ratio gain) × (probability it passes) ÷ (hours).
-Prefer, in order:
+When `work/<task>/DIRECTIVE.md` exists, it sets this task's target, mode (TUNE / RESTRUCTURE / IMPORT /
+HOLD) and ranked experiments. The strategist (skill `planning-vqcc-strategy`) wrote it from the whole
+competition's standing, which this worker cannot see. Follow it:
+- Put its 優先実験 at the top of "次にやること" in that order, and drop what it lists under やめること.
+  Follow its stop rules: when an item's stop rule fires, record why and go to the next item.
+- In RESTRUCTURE mode, do not spend the session on parameter re-tuning (item 4 below) until the
+  structural spike has met its stop rule.
+- Deviate only on evidence the directive did not have: a ledger result, an audit failure, or a
+  contradiction with BRIEF / AGENTS.md (those always win). Record each deviation in NOTES.md
+  "指令との差分" with the evidence, so the next strategist pass can adjust.
+- A hook notice (`(harness) 作戦参謀 ... DIRECTIVE.md を更新しました`) means the directive changed
+  mid-session: re-read it when the current step is done and re-rank.
+
+Without a directive, or for anything it leaves open, pick from "次にやること" in NOTES.md, ranked by
+(expected ratio gain) × (probability it passes) ÷ (hours). Prefer, in order:
 
 0. Bootstrap: while the task's verified best is still the official sample (ratio ≈ 1), first import the
    best public circuit (skill `gathering-vqcc-intel`, Procedure step 4: `kaggle kernels output`), audit it
@@ -131,4 +145,7 @@ After every evaluated candidate:
 
 ## 知見
 - コスト構造・verifier の挙動・失敗パターンなど再利用できる事実
+
+## 指令との差分
+- YYYY-MM-DD HH:MM DIRECTIVE の項目 / 従わなかった・変えた内容 / 根拠 (cand_id・ledger・監査結果)
 ```

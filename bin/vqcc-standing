@@ -1,0 +1,6 @@
+#!/bin/bash
+# Public LB standing: our rank, medal cutoffs and the per-task gain needed to reach them (harness/standing.py).
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/harness/config.sh"
+export VQCC_COMPETITION VQCC_TEAM_NAME VQCC_TARGET
+exec "$ROOT/harness/pyrun" "$ROOT/harness/standing.py" "$@"

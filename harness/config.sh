@@ -41,6 +41,15 @@ VQCC_PERMISSION_MODE="${VQCC_PERMISSION_MODE:-auto}"
 # Submissions: Kaggle allows 5/day (UTC); the harness uses at most this many.
 VQCC_MAX_SUBMITS_PER_DAY="${VQCC_MAX_SUBMITS_PER_DAY:-4}"
 VQCC_COMPETITION="google-verifiable-quantum-circuit-compilation"
+VQCC_TEAM_NAME="${VQCC_TEAM_NAME:-ikechan}"  # our team name on the leaderboard (bin/vqcc-standing)
+# Target for the strategist: gold | silver | bronze | <score>; empty = the next medal line above us.
+VQCC_TARGET="${VQCC_TARGET:-}"
+
+# Strategist ("作戦会議", skill planning-vqcc-strategy): one extra Claude session at night start and
+# then every this many minutes (0 = off). It writes work/STRATEGY.md and work/<task>/DIRECTIVE.md and
+# is closed after its single pass or after VQCC_STRATEGY_TIMEOUT_MIN.
+VQCC_STRATEGY_INTERVAL_MIN="${VQCC_STRATEGY_INTERVAL_MIN:-240}"
+VQCC_STRATEGY_TIMEOUT_MIN="${VQCC_STRATEGY_TIMEOUT_MIN:-45}"
 
 # Obsidian daily-note logging of the morning report: off by default. To enable, set it to the
 # obsidian-daily append_log.sh path in state/config.local.sh.

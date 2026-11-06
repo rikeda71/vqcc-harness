@@ -84,5 +84,8 @@ VQCC_OBSIDIAN_APPEND=1          # 朝レポートを Obsidian daily に追記 (�
   3. 前回提出が採点中でない
   4. `state/SUBMIT_BLOCKED` が無い (Kaggle で ERROR、または LB が予測より 5% 以上低いと自動作成される)
   5. 1 日 4 回まで (残り 1 回は手動用)
+
+  提出ファイルは `submissions/<UTC 時刻>/submission.zip` (この競技はファイル名が `submission.zip` 以外だと 400 で拒否される)。
+  毎回の試行は `state/submissions.jsonl` に残り、`kaggle competitions submit` 自体が失敗したときは exit 1。
 - **安全**: ワーカーは提出・`git push`・`gh`・`~/.kaggle` 読取・ハーネス/データ/ledger の編集が deny。
   公開ノートブックのコードは実行せず、データとして読むだけ。

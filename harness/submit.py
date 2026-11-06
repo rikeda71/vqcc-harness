@@ -16,7 +16,9 @@ Policy for --auto (every check is recorded; the first failing one is the "reason
     actually gave us
   * at most VQCC_MAX_SUBMITS_PER_DAY submissions per UTC day (counted from Kaggle itself and
     from our own log, whichever is larger)
-Every attempt (submitted or not) is appended to state/submissions.jsonl.
+Every attempt (submitted or not) is appended to state/submissions.jsonl. The upload is
+submissions/<UTC timestamp>/submission.zip (Kaggle requires that exact file name). --auto exits 1
+when `kaggle competitions submit` itself failed, 0 otherwise (including "policy said no").
 
   vqcc-submit                 show what would be submitted
   vqcc-submit --auto          submit if the policy allows (supervisor)
@@ -94,8 +96,10 @@ def choose() -> dict:
 
 
 def build_zip(choice: dict, name: str) -> Path:
-    OUT.mkdir(parents=True, exist_ok=True)
-    zpath = OUT / f"{name}.zip"
+    # Kaggle rejects (400) any upload not named exactly "submission.zip" for this competition,
+    # so each attempt gets its own directory: submissions/<name>/submission.zip
+    zpath = OUT / name / "submission.zip"
+    zpath.parent.mkdir(parents=True, exist_ok=True)
     tmp = zpath.with_suffix(".zip.tmp")
     with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         for task, c in choice["components"].items():
@@ -325,7 +329,7 @@ def main() -> int:
     log(rec)
     print(json.dumps({k: rec[k] for k in ("submitted", "reason", "predicted", "prev_best_predicted",
                                            "best_public", "used_today")}))
-    return 0
+    return 1 if rec.get("returncode") not in (None, 0) else 0
 
 
 if __name__ == "__main__":

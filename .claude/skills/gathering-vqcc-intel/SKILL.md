@@ -34,9 +34,9 @@ optimization loop itself (use `optimizing-vqcc-circuits`).
    Order: notebooks claiming the best ratio for your task first (title or BRIEF), then the newest. For
    source reading (step 3), skip those `work/<task>/BRIEF.md` already summarizes unless their last-run is
    newer; output verification (step 4) is never skipped for that reason.
-3. Pull source into a new empty directory, read only:
+3. Pull source into a new empty directory, read only (the `kaggle` CLI creates the directory; do not
+   `mkdir` under `data/` yourself — that is denied):
    ```bash
-   mkdir -p data/intel/notebooks/<owner>__<slug>
    kaggle kernels pull <owner>/<slug> -p data/intel/notebooks/<owner>__<slug>
    ```
    Read every cell (not only the first ones) as text, skipping embedded data blobs (base64, long numeric
@@ -44,7 +44,6 @@ optimization loop itself (use `optimizing-vqcc-circuits`).
    ideas in `work/<task>/src/` in our own code.
 4. Optional — pull output circuits for verification:
    ```bash
-   mkdir -p data/intel/outputs/<owner>__<slug>
    kaggle kernels output <owner>/<slug> -p data/intel/outputs/<owner>__<slug>
    ```
    Only circuit files (`.kmb`, `.kmx`, `submission.npz`, zips of them) are of interest; the submission

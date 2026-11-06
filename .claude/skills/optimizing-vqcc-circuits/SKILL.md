@@ -21,7 +21,9 @@ For public notebooks and discussions, use skill `gathering-vqcc-intel`.
 
 1. Read `$VQCC_WORKER` to know the task. Work only in `work/<task>/`.
 2. Read, in this order, whatever exists: `work/<task>/NOTES.md`, `work/<task>/BRIEF.md`,
-   `work/BRIEF_OVERVIEW.md`, `work/HARNESS_ISSUES.md`.
+   `work/BRIEF_OVERVIEW.md`, `work/HARNESS_ISSUES.md`. On your first session (or when NOTES.md does not
+   mention it yet), also read `docs/intel/kaggle-vqcc-primer.md` (cost tables, score trade-offs, verifier
+   behaviour, invsqrt approximation from an external guide) and note in NOTES.md which ideas apply.
 3. Run `bin/vqcc-best` to see the verified best per task and the predicted LB score.
 4. Run `bin/vqcc-remote status` to see remote jobs still in flight for this task.
 5. If `work/<task>/NOTES.md` does not exist, create it from the template below before any experiment.

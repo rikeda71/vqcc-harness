@@ -72,7 +72,8 @@ VQCC_OBSIDIAN_APPEND=1          # 朝レポートを Obsidian daily に追記 (�
 - **コンテキスト管理**: ワーカーのコンテキストが `VQCC_ROTATE_TOKENS` を超えると、Stop hook が NOTES.md への引き継ぎと
   コミットを指示し、supervisor が新しいセッション (`--resume` なし) で起動し直す。auto-compaction を起こさないため。
 - **ワーカー**: `AGENTS.md` と `.claude/skills/` (`optimizing-vqcc-circuits` / `evaluating-vqcc-candidates` /
-  `gathering-vqcc-intel`) に従い、`work/<task>/` で回路を作る。
+  `gathering-vqcc-intel`) に従い、`work/<task>/` で回路を作る。背景知識は `docs/intel/kaggle-vqcc-primer.md`
+  (束野「Google Quantum AI の Kaggle コンペ基礎知識」, CC BY 4.0, https://zenodo.org/records/23875845 の要約)。
 - **評価**: `bin/vqcc-verify` (ローカル quick / full) と `bin/vqcc-remote` (Kaggle CPU notebook) が公式 verifier を走らせ、
   結果を `ledger/results.jsonl` に追記。候補は内容ハッシュで `artifacts/` に固定される。
   改善と認めるのは full/remote が全 salt で PASS したものだけ。

@@ -50,6 +50,16 @@ VQCC_TARGET="${VQCC_TARGET:-}"
 # is closed after its single pass or after VQCC_STRATEGY_TIMEOUT_MIN.
 VQCC_STRATEGY_INTERVAL_MIN="${VQCC_STRATEGY_INTERVAL_MIN:-240}"
 VQCC_STRATEGY_TIMEOUT_MIN="${VQCC_STRATEGY_TIMEOUT_MIN:-45}"
+# A worker whose directive is exhausted parks (work/<task>/IDLE, no token use) until DIRECTIVE.md changes.
+# A newly parked worker brings the next strategist pass forward, but not sooner than this many
+# minutes after the previous pass.
+VQCC_STRATEGY_IDLE_GAP_MIN="${VQCC_STRATEGY_IDLE_GAP_MIN:-60}"
+
+# 0 (true) when worker $1 is parked: work/$1/IDLE exists and is not older than work/$1/DIRECTIVE.md.
+vqcc_parked() {
+  local i="$VQCC_ROOT/work/$1/IDLE" d="$VQCC_ROOT/work/$1/DIRECTIVE.md"
+  [ -f "$i" ] && ! [ "$d" -nt "$i" ]
+}
 
 # Obsidian daily-note logging of the morning report: off by default. To enable, set it to the
 # obsidian-daily append_log.sh path in state/config.local.sh.

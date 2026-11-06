@@ -34,6 +34,9 @@ fi
 [ -f "$wdir/STOP" ] && allow "worker STOP file present"
 vqcc_in_window || allow "outside night window"
 vqcc_over_limit && allow "usage guard: $(vqcc_usage)"
+# Directive exhausted: the worker parked itself (work/<w>/IDLE) and waits, without using tokens, for
+# the strategist to rewrite DIRECTIVE.md (its background wait command then wakes the session).
+vqcc_parked "$worker" && allow "parked: directive exhausted, waiting for a new DIRECTIVE.md"
 
 left=$(vqcc_min_to_end)
 
@@ -65,6 +68,6 @@ if [ "$left" -le "$VQCC_WRAPUP_MIN" ]; then
   msg="夜間ウィンドウ終了まで残り約 ${left} 分。新しい長時間実験は始めず、走行中の検証結果を回収して ledger に記録し、work/${worker}/NOTES.md の「現在地」「次にやること」を更新してコミット (work/ のローカル git) してください。終わったら短く報告して停止してよい。"
 else
   read -r five _ seven _ < <(vqcc_usage)
-  msg="続行してください (継続 #${n}, 窓の残り約 ${left} 分, 5h 使用率 ${five}%)。work/${worker}/NOTES.md の「次にやること」から最も期待値の高い実験を選び、仮説→実装→bin/vqcc-verify で評価→ledger 記録→NOTES 更新のループを回す。検証待ちの間は次の候補を準備する。ユーザーへの確認は不要 (誰も見ていない)。行き詰まったら別のアプローチに切り替え、その理由を NOTES に残す。"
+  msg="続行してください (継続 #${n}, 窓の残り約 ${left} 分, 5h 使用率 ${five}%)。work/${worker}/NOTES.md の「次にやること」から最も期待値の高い実験を選び、仮説→実装→bin/vqcc-verify で評価→ledger 記録→NOTES 更新のループを回す。検証待ちの間は次の候補を準備する。ユーザーへの確認は不要 (誰も見ていない)。行き詰まったら別のアプローチに切り替え、その理由を NOTES に残す。ただし DIRECTIVE.md の優先実験がすべて停止条件に達し、走行中の検証も無いなら、小さな再チューニングで時間を埋めず skill optimizing-vqcc-circuits の「Park」手順で待機する。"
 fi
 jq -n --arg r "$msg" '{decision: "block", reason: $r}'

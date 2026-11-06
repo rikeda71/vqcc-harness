@@ -34,6 +34,8 @@
 - ワーカーは DIRECTIVE.md を最優先の計画として扱う (skill `optimizing-vqcc-circuits` Step 2)。
   - ただし、AGENTS.md・BRIEF の禁止事項・人間の判断・BLOCKLIST は指令より常に優先する。
   - ledger や監査の証拠に基づいて指令から外れる場合は、NOTES.md「指令との差分」に根拠を書く。
+- 指令の優先実験をすべて消化し、新しい抜本的なアイデアも無いときは、小さな再チューニングで時間を埋めず待機する
+  (`work/<task>/IDLE` を書いて停止。手順は skill `optimizing-vqcc-circuits` の「Park」)。作戦参謀が DIRECTIVE.md を更新すると再開する。
 
 ## 評価 (必ず harness のツールを使う)
 

@@ -9,6 +9,8 @@ input="$(cat)"
 type="$(printf '%s' "$input" | jq -r '.notification_type // "unknown"' 2>/dev/null)"
 msg="$(printf '%s' "$input" | jq -r '.message // ""' 2>/dev/null | head -c 300)"
 wdir="$VQCC_STATE/workers/$worker"; mkdir -p "$wdir"
+# A parked worker sits at the prompt on purpose; do not flag it for a supervisor nudge.
+if [ "$type" = idle_prompt ] && vqcc_parked "$worker"; then exit 0; fi
 echo "$(date +%s) $type" > "$wdir/waiting"
 vqcc_log "notify[$worker]: $type: $msg"
 exit 0

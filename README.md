@@ -70,6 +70,7 @@ VQCC_ROTATE_TOKENS=120000       # ワーカーのコンテキストがこれを�
 VQCC_OBSIDIAN_APPEND=1          # 朝レポートを Obsidian daily に追記 (既定オフ)
 VQCC_STRATEGY_INTERVAL_MIN=240  # 作戦会議 (strategist) の間隔。0 で無効
 VQCC_STRATEGY_TIMEOUT_MIN=45    # 1 回の作戦会議の上限時間
+VQCC_STRATEGY_IDLE_GAP_MIN=60   # ワーカーが待機 (park) に入ったら、前回から最短この分数で作戦会議を前倒し
 VQCC_TARGET=                    # 目標: gold|silver|bronze|<score>。空 = 1 つ上のメダル線
 VQCC_TEAM_NAME=ikechan          # LB 上のチーム名
 ```
@@ -89,6 +90,10 @@ VQCC_TEAM_NAME=ikechan          # LB 上のチーム名
 
   ワーカーは起動時に DIRECTIVE を読む。途中で更新されると hook (`activity.sh`) から通知が届き、指令に沿って計画を組み替える。
   指令から外れる場合は、根拠を NOTES の「指令との差分」に書く。朝レポートには順位とメダル線の表が入る。
+  指令の優先実験を消化しきったワーカーは、小さな再チューニングで時間を埋めず `work/<task>/IDLE` を書いて待機 (park) する
+  (Stop hook が停止を許可し、トークンを使わない)。supervisor は待機中のワーカーを再起動せず、作戦会議を前倒しする。
+  作戦参謀は待機中のタスクに「新しい抜本的な構造変更 (RESTRUCTURE)」の指令を出すか、DIRECTIVE を書かずに待機を続けさせる (PARK)。
+  DIRECTIVE.md が更新されるとワーカーのバックグラウンド待機コマンドが終わり、作業を再開する。
 - **ワーカー**: `AGENTS.md` と `.claude/skills/` (`optimizing-vqcc-circuits` / `evaluating-vqcc-candidates` /
   `gathering-vqcc-intel`) と DIRECTIVE に従い、`work/<task>/` で回路を作る。背景知識は `docs/intel/kaggle-vqcc-primer.md`
   (束野「Google Quantum AI の Kaggle コンペ基礎知識」, CC BY 4.0, https://zenodo.org/records/23875845 の要約)。

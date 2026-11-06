@@ -180,6 +180,17 @@ strategy_tick() {  # $1 = now
     fi
   elif [ $(( $1 - STRAT_LAST )) -ge $(( VQCC_STRATEGY_INTERVAL_MIN * 60 )) ] && [ "$(vqcc_min_to_end)" -gt 60 ]; then
     STRAT_LAST=$1; start_strategist
+  elif [ $(( $1 - STRAT_LAST )) -ge $(( VQCC_STRATEGY_IDLE_GAP_MIN * 60 )) ] && [ "$(vqcc_min_to_end)" -gt 60 ]; then
+    # A worker parked after the last pass: bring the next pass forward (once per newly parked worker).
+    local w im
+    st=$(cat "$wdir/started" 2>/dev/null || echo 0)
+    for w in $VQCC_WORKERS; do
+      im=$(/usr/bin/stat -f %m "$ROOT/work/$w/IDLE" 2>/dev/null || echo 0)
+      if vqcc_parked "$w" && [ "$im" -gt "$st" ]; then
+        vqcc_log "supervisor: $w parked (directive exhausted); strategist pass brought forward"
+        STRAT_LAST=$1; start_strategist; break
+      fi
+    done
   fi
 }
 
@@ -251,6 +262,8 @@ while :; do
     fi
     if ! worker_alive "$w"; then
       if [ -f "$wdir/STOP" ]; then continue; fi
+      # Parked (directive exhausted): stay down until the strategist rewrites DIRECTIVE.md.
+      if vqcc_parked "$w"; then continue; fi
       rs=$(( $(cat "$wdir/restarts" 2>/dev/null || echo 0) + 1 )); echo "$rs" > "$wdir/restarts"
       snapshot "$w" dead 200
       if [ "$rs" -le 6 ]; then
@@ -262,6 +275,8 @@ while :; do
       fi
       continue
     fi
+    # Parked (directive exhausted): idle at the prompt on purpose; nothing to watch.
+    if vqcc_parked "$w"; then rm -f "$wdir/waiting"; continue; fi
     # Subscription limit message on screen (five_hour is not always present in the status line).
     if hd pane read "$(wpane "$w")" --source visible 2>/dev/null | grep -v '^[[:space:]]*$' | tail -12 | \
        grep -Eqi "hit your (session |weekly |5-hour )?limit|(usage|session|5-hour|weekly) limit (reached|will reset)|limit reached.*resets"; then
@@ -277,8 +292,18 @@ while :; do
         nudge "$w" "(supervisor) この操作の承認者はいません。拒否されたものとして扱い、許可されている手段 (bin/vqcc-* や work/ 内のスクリプト) で代替してください。作業を続行してください。"
       fi
     fi
-    # No activity for 40 minutes: the session may be stuck (long tool call is fine, but check).
+    # Unparked by a new DIRECTIVE.md: the worker's background wait command should wake it; if that
+    # command is gone (e.g. after a resume) and nothing happened for 5 min, nudge once per update.
     hb=$(cat "$wdir/heartbeat" 2>/dev/null || echo "$now")
+    dm=$(/usr/bin/stat -f %m "$ROOT/work/$w/DIRECTIVE.md" 2>/dev/null || echo 0)
+    if [ -f "$ROOT/work/$w/IDLE" ]; then
+      if [ $(( now - dm )) -ge 300 ] && [ "$hb" -lt "$dm" ] && [ "$(cat "$wdir/unpark_nudged" 2>/dev/null)" != "$dm" ]; then
+        echo "$dm" > "$wdir/unpark_nudged"
+        nudge "$w" "(supervisor) 作戦参謀が work/${w}/DIRECTIVE.md を更新しました。work/${w}/IDLE を削除し、skill optimizing-vqcc-circuits Step 2 に従って新しい指令で作業を再開してください。"
+      fi
+      continue  # the heartbeat is old from the parked time; skip the stale check until the worker resumes
+    fi
+    # No activity for 40 minutes: the session may be stuck (long tool call is fine, but check).
     if [ $(( now - hb )) -ge 2400 ]; then
       snapshot "$w" stale 60
       vqcc_log "supervisor: worker $w no heartbeat for $(( (now - hb) / 60 )) min (snapshot saved)"

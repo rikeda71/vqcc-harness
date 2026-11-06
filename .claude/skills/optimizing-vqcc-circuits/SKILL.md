@@ -44,7 +44,32 @@ competition's standing, which this worker cannot see. Follow it:
 - A hook notice (`(harness) 作戦参謀 ... DIRECTIVE.md を更新しました`) means the directive changed
   mid-session: re-read it when the current step is done and re-rank.
 
-Without a directive, or for anything it leaves open, pick from "次にやること" in NOTES.md, ranked by
+### Park when the directive is exhausted
+
+When every 優先実験 in DIRECTIVE.md has finished or met its stop rule, do not fill the time with small
+re-tuning or variations of exhausted items: that spends the shared usage budget for nothing. Either
+start a genuinely new structural idea, or park:
+
+1. Continue only with an idea that is not in the directive and not a variant of a stopped item, that
+   changes the dominant cost term of the current best, and that you estimate at ≥ 3% ratio gain with a
+   concrete spike plan. Record it in NOTES.md "指令との差分" (idea, expected gain, stop rule) and run it
+   like a directive item. Otherwise park.
+2. To park: first collect every in-flight verification of this task (`bin/vqcc-remote status`, local
+   background runs) into the ledger and NOTES. Then write `work/<task>/IDLE` with the time, one line
+   per exhausted item (its result), and up to 3 structural ideas for the strategist with expected gain.
+   Update NOTES.md 現在地 ("parked: DIRECTIVE 消化済み, 新指令待ち") and commit.
+3. Start this wait with Bash `run_in_background: true` (absolute paths):
+   `until [ ! -f <root>/work/<task>/IDLE ] || [ <root>/work/<task>/DIRECTIVE.md -nt <root>/work/<task>/IDLE ]; do sleep 60; done; echo DIRECTIVE updated`
+   Then end the turn with a one-line report. The Stop hook lets a parked worker stop; the session uses
+   no tokens until the strategist rewrites DIRECTIVE.md and the wait command wakes you.
+4. When woken (wait command finished, or a supervisor/hook notice about a new directive): delete
+   `work/<task>/IDLE`, re-read DIRECTIVE.md and continue from Step 2. If the new directive still gives
+   nothing to do (e.g. the strategist chose to keep this task parked), park again from 2.
+5. On a session start or restart, if `work/<task>/IDLE` exists and DIRECTIVE.md is not newer than it,
+   you are still parked: check for finished in-flight results only, then go straight to 3. If
+   DIRECTIVE.md is newer than IDLE, you were unparked: do 4.
+
+Without a directive, or for anything it leaves open (but see "Park" above once it is exhausted), pick from "次にやること" in NOTES.md, ranked by
 (expected ratio gain) × (probability it passes) ÷ (hours). Prefer, in order:
 
 0. Bootstrap: while the task's verified best is still the official sample (ratio ≈ 1), first import the

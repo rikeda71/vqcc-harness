@@ -53,7 +53,8 @@ are broken by submission time, so the target is to beat the cutoff score, not to
 Then read:
 
 - `work/STRATEGY.md` and the newest entries of `work/strategy/log.md` (the previous pass's decisions).
-- Each `work/<task>/DIRECTIVE.md` (the previous directive).
+- Each `work/<task>/DIRECTIVE.md` (the previous directive) and `work/<task>/IDLE` if present (the
+  worker parked; see Step 4).
 - Each `work/<task>/NOTES.md` in full: 現在のベスト, 現在地, 進行中, 次にやること, the last ~15 entries
   of 試したこと, 知見, and 指令との差分 (where the worker explains any deviation).
   Also read any plan files that NOTES points to (e.g. `work/dqi/PLAN_Q.md`).
@@ -118,6 +119,17 @@ Also check what the last directive asked and what happened, using 試したこ�
 If a worker ignored a directive with good evidence, adopt its view. If a directive item failed, do not
 reissue it unchanged.
 
+Parked tasks: a worker that exhausted its directive writes `work/<task>/IDLE` (exhausted items and
+its structural ideas) and waits without using tokens; the supervisor brings this pass forward when that
+happens. Any write to that task's DIRECTIVE.md wakes the worker. For a parked task choose one:
+- **New RESTRUCTURE**: a genuinely different structure (not a re-tune or variant of an exhausted item)
+  that attacks the dominant cost term, with expected gain ≥ ~3% and a spike stop rule. Use the
+  worker's ideas in IDLE when they qualify. Then write the directive as usual.
+- **PARK**: nothing qualifies, or the task's gain per hour is far below the others'. Do not write that
+  task's DIRECTIVE.md at all (even an identical rewrite wakes the worker); record "PARK — <reason>" in
+  STRATEGY.md タスク別配分 and in the log. Do not issue HOLD for a parked task: HOLD keeps a session
+  running on low-value work.
+
 ## Step 5: Write the outputs
 
 1. `work/STRATEGY.md`, overwritten each pass, in this order:
@@ -125,7 +137,8 @@ reissue it unchanged.
    the target and stretch), 上位の推定 (hypotheses with confidence), タスク別配分 (the Step 3 table plus
    the mode), 今回の判断と根拠, 要人間判断. Start the file with a timestamp and the standing
    `leaderboard_csv` path.
-2. `work/<task>/DIRECTIVE.md` for each task in `VQCC_WORKERS`, overwritten each pass, using this template:
+2. `work/<task>/DIRECTIVE.md` for each task in `VQCC_WORKERS` except tasks you keep PARKed (Step 4),
+   overwritten each pass, using this template:
 
    ```markdown
    # DIRECTIVE <task> — <YYYY-MM-DD HH:MM> (strategist)

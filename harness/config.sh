@@ -13,7 +13,7 @@ VQCC_WRAPUP_MIN="${VQCC_WRAPUP_MIN:-20}"
 # Claude subscription guard: stop all workers when the 5h window usage reaches this (%).
 VQCC_FIVE_HOUR_LIMIT="${VQCC_FIVE_HOUR_LIMIT:-90}"
 # Also stop when the 7-day usage reaches this (%), to leave the user's weekly budget alone.
-VQCC_SEVEN_DAY_LIMIT="${VQCC_SEVEN_DAY_LIMIT:-80}"
+VQCC_SEVEN_DAY_LIMIT="${VQCC_SEVEN_DAY_LIMIT:-90}"
 # After a 5h stop, resume workers once the window has reset (if still inside the night window).
 VQCC_RESUME_AFTER_RESET="${VQCC_RESUME_AFTER_RESET:-1}"
 

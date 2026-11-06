@@ -1,4 +1,4 @@
-"""Smoke tests for bin/vqcc-verify error handling (run: .venv/bin/python -I tests/test_verify_errors.py).
+"""Smoke tests for bin/vqcc-verify error handling (run: harness/pyrun tests/test_verify_errors.py).
 
 Uses the real ledger/artifacts (records are labelled 'selftest'); takes about a minute.
 """

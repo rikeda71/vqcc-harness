@@ -6,4 +6,4 @@
 # Workers must not call this (denied in .claude/settings.json); the supervisor calls --auto.
 ROOT="$(cd "$(dirname "$0")/.." >/dev/null 2>&1 && pwd -P)"
 . "$ROOT/harness/config.sh"
-exec "$ROOT/.venv/bin/python" -I "$ROOT/harness/submit.py" "$@"
+exec "$ROOT/harness/pyrun" "$ROOT/harness/submit.py" "$@"

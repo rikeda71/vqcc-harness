@@ -50,7 +50,7 @@ rm -f "$VQCC_STATE/STOP"
 caffeinate -dimsu -w $$ &
 
 # Is the competition still running and Kaggle reachable? (0 ok, 1 unreachable, 3 over)
-kaggle_check() { KH=$("$ROOT/.venv/bin/python" -I "$ROOT/harness/kaggle_health.py" 2>&1); KRC=$?; }
+kaggle_check() { KH=$("$ROOT/harness/pyrun" "$ROOT/harness/kaggle_health.py" 2>&1); KRC=$?; }
 for i in $(seq 1 "$VQCC_KAGGLE_START_RETRIES"); do
   kaggle_check; [ "$KRC" != 1 ] && break
   vqcc_log "supervisor: kaggle check failed ($i/$VQCC_KAGGLE_START_RETRIES): $KH"

@@ -84,7 +84,7 @@ status() {
 case "${1:-status}" in
   start)
     # Refuse to start when the competition is over or Kaggle is unreachable right now.
-    if ! h=$("$ROOT/.venv/bin/python" -I "$ROOT/harness/kaggle_health.py"); then
+    if ! h=$("$ROOT/harness/pyrun" "$ROOT/harness/kaggle_health.py"); then
       echo "not started: $h"; exit 1
     fi
     echo "kaggle   : $h"

@@ -1,0 +1,19 @@
+#!/bin/sh
+# Run a harness Python script in the project's locked uv environment, in isolated mode.
+#
+#   harness/pyrun <script.py> [args...]
+#
+# Equivalent to the former `.venv/bin/python -I <script.py>`: same interpreter, exactly the versions
+# pinned in uv.lock (kickmix must match the official verifier), and `-I` so that neither the cwd,
+# PYTHONPATH nor user site-packages reach sys.path (data/ holds untrusted files).
+#   --project "$ROOT"  uv looks for pyproject.toml/uv.lock/.venv here, never in the cwd
+#   --frozen           never re-lock or re-resolve; the env is synced from uv.lock as is
+#   --offline          no network access (launchd at night may be offline); if .venv is missing, it is built
+#                      from uv's wheel cache. Warm it up once with: uv sync --frozen
+# Falls back to .venv/bin/python when uv cannot be found (launchd has a minimal PATH).
+ROOT="$(cd "$(dirname "$0")/.." >/dev/null 2>&1 && pwd -P)"
+PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+if UV="$(command -v uv)" && [ -n "$UV" ]; then
+  exec "$UV" run --quiet --frozen --offline --project "$ROOT" python -I "$@"
+fi
+exec "$ROOT/.venv/bin/python" -I "$@"

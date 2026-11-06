@@ -11,11 +11,14 @@ Kaggle「Google Quantum AI - Verifiable Quantum Circuit Compilation」用の夜�
 前提: Kaggle CLI 認証済みで競技に参加済み、`claude` CLI ログイン済み、herdr 0.9 以降、`uv`。
 
 ```bash
-uv sync                      # .venv に kickmix / numpy / scipy
+uv sync --frozen             # .venv に kickmix / numpy / scipy (uv.lock の版。公式 verifier と同じ版にピン留め)
 kaggle competitions download -c google-verifiable-quantum-circuit-compilation -p data/raw   # 展開して data/raw/ へ
 bin/vqcc-calibrate           # サンプル提出のコストを測り harness/refs.json を作る
 claude                       # 一度対話起動して workspace trust を承認し、終了する
 ```
+
+bin/ のコマンドは `harness/pyrun` 経由で `uv run --frozen --offline --project . python -I <script>` を実行する (uv.lock どおりの .venv、`-I` で cwd/PYTHONPATH を遮断。uv が PATH に無ければ `.venv/bin/python -I` に退避)。
+新しい Python スクリプトは `harness/` に置き、`bin/` のラッパーから `exec "$ROOT/harness/pyrun" "$ROOT/harness/<x>.py" "$@"` で呼ぶ。依存を足すときは `uv add <pkg>` で pyproject.toml / uv.lock を更新してから `uv sync --frozen`。
 
 ## 開始と停止
 

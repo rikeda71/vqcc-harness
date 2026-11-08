@@ -49,7 +49,7 @@ VQCC_TARGET="${VQCC_TARGET:-}"
 # then every this many minutes (0 = off). It writes work/STRATEGY.md and work/<task>/DIRECTIVE.md and
 # is closed after its single pass or after VQCC_STRATEGY_TIMEOUT_MIN.
 VQCC_STRATEGY_INTERVAL_MIN="${VQCC_STRATEGY_INTERVAL_MIN:-240}"
-VQCC_STRATEGY_TIMEOUT_MIN="${VQCC_STRATEGY_TIMEOUT_MIN:-45}"
+VQCC_STRATEGY_TIMEOUT_MIN="${VQCC_STRATEGY_TIMEOUT_MIN:-60}"
 # A worker whose directive is exhausted parks (work/<task>/IDLE, no token use) until DIRECTIVE.md changes.
 # A newly parked worker brings the next strategist pass forward, but not sooner than this many
 # minutes after the previous pass.

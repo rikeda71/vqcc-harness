@@ -60,7 +60,9 @@ start a genuinely new structural idea, or park:
    finish (e.g. "両 PASS なら save"). The supervisor polls remote jobs into the ledger and wakes you when
    all of this task's remote jobs have finished (see 4). Then write `work/<task>/IDLE` with the time
    (`YYYY-MM-DD HH:MM`), one line per exhausted item (its result), running jobs, and up to 3 structural
-   ideas for the strategist with expected ratio gain.
+   ideas for the strategist with expected ratio gain. Derive them from this task's cost anatomy (which
+   stage owns the dominant term, how far it is from the lowest cost any formulation could reach), not
+   from "wait for the next public circuit": the strategist turns them into RESTRUCTURE spikes.
    Update NOTES.md 現在地 ("parked: DIRECTIVE 消化済み, 新指令待ち") and commit.
 3. Start this wait with Bash `run_in_background: true` (absolute paths):
    `until [ ! -f <root>/work/<task>/IDLE ] || [ <root>/work/<task>/DIRECTIVE.md -nt <root>/work/<task>/IDLE ]; do sleep 60; done; echo woken`

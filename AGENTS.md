@@ -26,10 +26,12 @@
 - strategist は skill `planning-vqcc-strategy` に従って次の順に進める。
   1. 順位とメダル・目標までの距離を `bin/vqcc-standing` で測る。
   2. 上位の手法を推定する。
+  2b. 公開情報に頼らない自前の抜本策を、コストの内訳と下限から設計し、試算で確かめる (`work/strategy/breakthrough/<task>.md`)。
+     公開の複製では公開の上限までしか届かない。「既知の案が尽きた」は待機の理由にしない。
   3. 目標から逆算し、タスクごとの目標 ratio と方針 (TUNE / RESTRUCTURE / IMPORT / HOLD) を決める。
   4. `work/STRATEGY.md` と各タスクの `work/<task>/DIRECTIVE.md` を書く。
 - strategist が書いてよいのは、`work/STRATEGY.md`、`work/<task>/DIRECTIVE.md`、`work/strategy/` 以下、共有の追記用ファイルだけ。
-  - 回路の作成・検証はしない。
+  - 回路の作成・検証はしない (コストの数え上げや近似誤差の試算など、`work/strategy/scripts/` の小さな机上試算はしてよい)。
   - 各タスクの NOTES.md・BRIEF.md・BLOCKLIST には書かない。
 - ワーカーは DIRECTIVE.md を最優先の計画として扱う (skill `optimizing-vqcc-circuits` Step 2)。
   - ただし、AGENTS.md・BRIEF の禁止事項・人間の判断・BLOCKLIST は指令より常に優先する。

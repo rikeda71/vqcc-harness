@@ -70,7 +70,7 @@ VQCC_MAX_SUBMITS_PER_DAY=5
 VQCC_ROTATE_TOKENS=120000       # ワーカーのコンテキストがこれを超えたら新セッションに切り替え
 VQCC_OBSIDIAN_APPEND=1          # 朝レポートを Obsidian daily に追記 (既定オフ)
 VQCC_STRATEGY_INTERVAL_MIN=240  # 作戦会議 (strategist) の間隔。0 で無効
-VQCC_STRATEGY_TIMEOUT_MIN=45    # 1 回の作戦会議の上限時間
+VQCC_STRATEGY_TIMEOUT_MIN=60    # 1 回の作戦会議の上限時間
 VQCC_STRATEGY_IDLE_GAP_MIN=30   # ワーカーが待機 (park) に入ったら、前回から最短この分数で作戦会議を前倒し
 VQCC_TARGET=                    # 目標: gold|silver|bronze|<score>。空 = 1 つ上のメダル線
 VQCC_TEAM_NAME=ikechan          # LB 上のチーム名
@@ -86,6 +86,8 @@ VQCC_TEAM_NAME=ikechan          # LB 上のチーム名
   (herdr タブ `strategist`) を 1 回起動する。順序は次のとおり。
   1. `bin/vqcc-standing` で順位、メダル線、目標までの倍率、タスク別の進捗速度、締切を測る。
   2. 公開ノートブックと各ワーカーの NOTES から上位の手法を推定する。
+  2b. 公開情報に頼らない自前の抜本策を作る。各タスクのコストの内訳と下限から案を出し、小さな試算スクリプトで確かめて
+     `work/strategy/breakthrough/<task>.md` に蓄積する (公開情報の複製では公開の上限までしか届かないため)。
   3. 目標から逆算して、タスクごとの目標 ratio と方針 (TUNE / RESTRUCTURE / IMPORT / HOLD) を決める。
   4. `work/STRATEGY.md` と `work/<task>/DIRECTIVE.md` を書く。
 
@@ -94,6 +96,7 @@ VQCC_TEAM_NAME=ikechan          # LB 上のチーム名
   指令の優先実験を消化しきったワーカーは、小さな再チューニングで時間を埋めず `work/<task>/IDLE` を書いて待機 (park) する
   (Stop hook が停止を許可し、トークンを使わない)。supervisor は待機中のワーカーを再起動せず、作戦会議を前倒しする。
   作戦参謀は待機中のタスクに「新しい抜本的な構造変更 (RESTRUCTURE)」の指令を出すか、DIRECTIVE を書かずに待機を続けさせる (PARK)。
+  「既知・公開の案を使い切った」は PARK の理由にならず、PARK は自前の案 (2b) にも成功時の改善が 3% 以上見込めるものが無いときに限る。
   DIRECTIVE.md が更新されるとワーカーのバックグラウンド待機コマンドが終わり、作業を再開する。
 - **ワーカー**: `AGENTS.md` と `.claude/skills/` (`optimizing-vqcc-circuits` / `evaluating-vqcc-candidates` /
   `gathering-vqcc-intel`) と DIRECTIVE に従い、`work/<task>/` で回路を作る。背景知識は `docs/intel/kaggle-vqcc-primer.md`

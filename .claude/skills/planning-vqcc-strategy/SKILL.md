@@ -141,9 +141,11 @@ file per task, `work/strategy/breakthrough/<task>.md` (create it if missing; nev
    (directive time) / no-go (reason, evidence). Read the workers' IDLE and NOTES before writing, so a
    no-go is never re-proposed and a worker's own idea is credited.
 
-Ideas that need a technique the hard limits forbid are not ideas; drop them. The best untested idea
-whose gain if it works is ≥ ~3% (success probability ≥ ~0.1 is enough for a research spike) is the
-input to Step 4. If the floors show the target cannot be reached on some task even when every idea
+Ideas that need a technique the hard limits forbid are not ideas; drop them. Mark an idea no-go only on
+evidence: a proof, a hard-limit or BRIEF violation, a verifier fact, or a built and measured spike. A
+napkin estimate that it "probably" fails, or a low success probability, lowers its rank; it does not close
+it. Rank the open ideas by expected gain (gain if it works × probability); they are the input to Step 4
+together with their thresholds there. If the floors show the target cannot be reached on some task even when every idea
 works, write that with the numbers in 今回の判断 and aim at the best reachable ratio; do not ask humans
 for ideas.
 
@@ -176,8 +178,15 @@ Pick exactly one mode per task and justify it with numbers:
 |---|---|
 | IMPORT | An audited-legal public circuit or technique (including a public data file, such as a coefficient table, used with our own circuit) beats our verified best. Reproduce or verify it first; it is the cheapest gain. |
 | TUNE | Velocity is real (≥ ~0.5% ratio per night over the last 2 nights, or over the last 24h of ledger) and the allocated gain is within reach of parameter or local changes listed in NOTES. |
-| RESTRUCTURE | Velocity has stalled (< ~0.5% per night for 2 nights, or the last ~5 experiments gave < 0.2% each), or the allocated gain is larger than tuning can plausibly give (rule of thumb: > 3–5%), or the dominant cost term in the verifier breakdown is untouched by the current line of work. Name the structural change, its expected gain, and a spike experiment with a stop rule (for example, "if no quick PASS at ratio ≥ X within 3h, write the reason in NOTES and fall back to TUNE item 1"). |
+| RESTRUCTURE | Velocity has stalled (< ~0.5% per night for 2 nights, or the last ~5 experiments gave < 0.2% each), or the allocated gain is larger than tuning can plausibly give (rule of thumb: > 3–5%), or the dominant cost term in the verifier breakdown is untouched by the current line of work. Name the structural change, its expected gain, and a spike experiment with a progress-based stop rule (see below). |
 | HOLD | Only for a task whose expected gain per hour is far below the others' while a shared resource (remote quota, local CPU) is the bottleneck. The worker then does cheap, low-CPU work: audits, verification backlog, design notes. |
+
+Stop rules judge progress, not arrival. An item stops when its attacked metric (stage cost, error,
+λ, qubit peak, quick ratio) has stopped moving toward the target after at least 2 different methods for
+the blocker, not because it has not reached the target yet. Write them as, for example: "time box 3h;
+if each attempt improves the metric, extend up to 2× and keep going; stop when 2 different methods give
+no improvement, write the reason in NOTES and go to item 2". An item that is approaching the target but
+cannot reach it alone is still worth finishing: every verified gain counts toward the medal line.
 
 Also check what the last directive asked and what happened, using 試したこと and 指令との差分 in NOTES.
 If a worker ignored a directive with good evidence, adopt its view. If a directive item failed, do not
@@ -186,14 +195,18 @@ reissue it unchanged.
 Parked tasks: a worker that exhausted its directive writes `work/<task>/IDLE` (exhausted items and
 its structural ideas) and waits without using tokens; the supervisor brings this pass forward when that
 happens. Any write to that task's DIRECTIVE.md wakes the worker. For a parked task choose one:
-- **New RESTRUCTURE**: a genuinely different structure (not a re-tune or variant of an exhausted item)
-  that attacks the dominant cost term, with a gain ≥ ~3% if it works and a spike stop rule. Take it from
-  `work/strategy/breakthrough/<task>.md` (Step 2b) or from the worker's ideas in IDLE. Then write the
-  directive as usual and mark the idea "spike assigned". When the spike's stop rule fires and no TUNE
-  item is worth it, its fallback is "park again" (not re-tuning).
-- **PARK**: only when Step 2b has been done for this task this night and its file has no untested or
-  desk-checked idea with a gain ≥ ~3% if it works, or when the usage guard is close (`seven_day_pct` in
-  `state/usage.json` within ~10 points of `VQCC_SEVEN_DAY_LIMIT`, default 90). "No known or public structure left" is not a reason: do Step 2b first. Do not
+- **New RESTRUCTURE / TUNE**: a genuinely different structure (not a re-tune or variant of an exhausted
+  item) that attacks the dominant cost term, or, when the next medal line is within ×1.001, a sure small
+  gain (a few Toffoli / T / qubits). Take it from `work/strategy/breakthrough/<task>.md` (Step 2b) or from
+  the worker's ideas in IDLE, and give it a progress-based stop rule (below). Then write the directive as
+  usual and mark the idea "spike assigned". List the next 2–3 ranked ideas as later items, so that the
+  worker moves on instead of parking when one stops.
+- Thresholds for issuing an idea scale with the usage budget (`seven_day_pct` in `state/usage.json`):
+  below 50, issue any idea with gain ≥ ~1.5% if it works and expected gain ≥ ~0.1% (a low-probability
+  idea is worth more than an idle worker); from 50, only gain ≥ ~3% with probability ≥ ~0.1.
+- **PARK**: only when Step 2b has been done for this task this night and no open idea meets the
+  threshold above, or when the usage guard is close (`seven_day_pct` within ~10 points of
+  `VQCC_SEVEN_DAY_LIMIT`, default 90). "No known or public structure left" is not a reason: do Step 2b first. Do not
   write that task's DIRECTIVE.md at all (even an identical rewrite wakes the worker); record
   "PARK — <reason>" in STRATEGY.md タスク別配分 and in the log. Do not issue HOLD for a parked task:
   HOLD keeps a session running on low-value work.
@@ -218,7 +231,7 @@ happens. Any write to that task's DIRECTIVE.md wakes the worker. For a parked ta
    ## モード
    TUNE | RESTRUCTURE | IMPORT | HOLD — <2–3 lines of reasons with numbers>
    ## 優先実験 (上から順に)
-   1. <hypothesis> — expected gain <x%> — stop rule <condition / time box>
+   1. <hypothesis> — expected gain <x%> — stop rule <progress condition / time box, extension when improving>
    2. ...
    3. ...
    ## やめること

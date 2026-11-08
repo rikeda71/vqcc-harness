@@ -36,6 +36,12 @@ HOLD) and ranked experiments. The strategist (skill `planning-vqcc-strategy`) wr
 competition's standing, which this worker cannot see. Follow it:
 - Put its 優先実験 at the top of "次にやること" in that order, and drop what it lists under やめること.
   Follow its stop rules: when an item's stop rule fires, record why and go to the next item.
+- Stop rules judge progress, not arrival. While each attempt moves the item's metric (stage cost,
+  error, λ, qubit peak, quick ratio) toward its target, keep going past the time box (up to 2×) even if
+  the target looks out of reach: a smaller verified gain still counts. Stop an item only after at least
+  2 different methods for its blocker gave no improvement, and record the methods and numbers.
+- Call something no-go only on evidence (a proof, a BRIEF / hard-limit violation, a verifier fact, a
+  measured prototype), not on a napkin estimate.
 - In RESTRUCTURE mode, do not spend the session on parameter re-tuning (item 4 below) until the
   structural spike has met its stop rule.
 - Deviate only on evidence the directive did not have: a ledger result, an audit failure, or a
@@ -46,13 +52,15 @@ competition's standing, which this worker cannot see. Follow it:
 
 ### Park when the directive is exhausted
 
-When every 優先実験 in DIRECTIVE.md has finished or met its stop rule, do not fill the time with small
-re-tuning or variations of exhausted items: that spends the shared usage budget for nothing. Either
-start a genuinely new structural idea, or park:
+When every 優先実験 in DIRECTIVE.md has finished or met its stop rule, do not repeat variations of
+exhausted items that have stopped producing gains: that spends the shared usage budget for nothing.
+Either continue with something that still makes progress, or park:
 
-1. Continue only with an idea that is not in the directive and not a variant of a stopped item, that
-   changes the dominant cost term of the current best, and that you estimate at ≥ 3% ratio gain with a
-   concrete spike plan (a first candidate you can build and quick-test within ~2 h, plus a stop rule).
+1. Continue with an idea that is not in the directive and not a variant of a stopped item, with a
+   concrete spike plan (a first candidate you can build and quick-test within ~2 h, plus a progress-based
+   stop rule): a structural idea against the dominant cost term (gain ≥ ~1.5% if it works while
+   `seven_day_pct` in `state/usage.json` is below 50, else ≥ 3%), or, when the next medal line is within
+   ×1.001 (STRATEGY.md 目標と距離), a sure small gain (a few Toffoli / T / qubits).
    Record it in NOTES.md "指令との差分" (idea, expected gain, stop rule) and run it like a directive
    item. Otherwise park: hand an idea that needs more design to the strategist through IDLE.
 2. To park: record finished results (`bin/vqcc-remote status`, local logs) in NOTES. Do not wait for
@@ -150,8 +158,9 @@ After every evaluated candidate:
 - AGENTS.md 禁止事項 and このマシンでの注意 apply throughout (correct circuits only, no submit/push,
   no edits outside `work/`, `nice` for heavy jobs, no `cd`). Write harness problems to
   `work/HARNESS_ISSUES.md` and continue with a workaround.
-- Nobody answers questions at night. When stuck for more than ~45 minutes on one idea, write down why
-  and switch to the next idea.
+- Nobody answers questions at night. When one method has made no progress for ~90 minutes, write down
+  why and try a different method for the same blocker; move to the next idea after 2 different methods
+  gave nothing (see Step 2).
 - When the Stop hook says the window is closing, start nothing new: collect running results, update
   NOTES.md, commit, and stop.
 

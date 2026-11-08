@@ -73,6 +73,8 @@ status() {
     echo "night    : not running; no night will start until /vqcc-night (bin/vqcc-schedule start)"
   fi
   echo "usage    : $(vqcc_usage)  (5h% resets_at 7d% age_s)"
+  echo "== workers (PARKED = finished its directive and waits for the strategist; the | lines are IDLE / NOTES 現在地)"
+  "$ROOT/harness/pyrun" "$ROOT/harness/workers.py" 2>/dev/null || echo "(worker state unavailable)"
   echo "== last night's report"
   cat "$VQCC_STATE/last_report_summary.txt" 2>/dev/null || echo "(none yet)"
   [ -f "$ROOT/reports/DAILY.md" ] && { echo "== recent nights (reports/DAILY.md)"; tail -n 5 "$ROOT/reports/DAILY.md"; }

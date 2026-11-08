@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ledger  # noqa: E402
+import workers  # noqa: E402
 
 ROOT = ledger.ROOT
 STATE = ROOT / "state"
@@ -61,6 +62,10 @@ def main() -> int:
                              f"{g['product_multiplier']:.4f} | "
                              + " / ".join(f"{g['one_task_alone_ratio'][t]:.3f}" for t in ledger.TASKS) + " |")
         lines.append("")
+    lines += ["## Worker state at the end of the night (harness/workers.py)", "",
+              "PARKED = the worker finished its directive and waits for a new one; the indented lines are the head of "
+              "work/<task>/IDLE (what was done and why it stopped), or NOTES.md「現在地」for a working task.", "",
+              "```", *workers.lines(idle_lines=12), "```", ""]
     strat = ROOT / "work" / "STRATEGY.md"
     if strat.exists():
         lines += ["## work/STRATEGY.md (head)", "", *strat.read_text().splitlines()[:40], ""]
@@ -128,7 +133,7 @@ def main() -> int:
     daily.write_text("\n".join(head + rows) + "\n")
     summary = (f"VQCC 夜間ラン {nid}: 検証 {len(recs)} 回, 予測 LB {pred:.4f} ({delta} vs 前夜) "
                f"(invsqrt {ratios['invsqrt']:.3f} / dqi {ratios['dqi']:.3f} / dfthcsos {ratios['dfthcsos']:.3f}), "
-               f"提出 {sum(s['submitted'] for s in subs)} 件。詳細: {path}")
+               f"提出 {sum(s['submitted'] for s in subs)} 件。worker: {workers.short()}。詳細: {path}")
     print(summary)
     (STATE / "last_report_summary.txt").write_text(summary + "\n")
     return 0

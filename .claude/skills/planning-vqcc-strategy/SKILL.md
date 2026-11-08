@@ -19,8 +19,8 @@ anatomy of each task (Step 2b), checks them on paper or with small cost-model sc
 best ones to the workers as RESTRUCTURE spikes. "Known ideas are exhausted" is never a reason to park a
 task while the target is out of reach; it is the signal to do Step 2b.
 
-One pass should take 20–50 minutes (the supervisor closes the session after
-`VQCC_STRATEGY_TIMEOUT_MIN`, default 60). Write the files early and refine them; a pass that times out
+The night's first pass (with Step 2b in depth) takes up to ~55 minutes, later passes 15–25 minutes
+(the supervisor closes the session after `VQCC_STRATEGY_TIMEOUT_MIN`, default 60). Write the files early and refine them; a pass that times out
 before writing anything is wasted.
 
 ## Hard limits (the directive cannot change these)
@@ -99,8 +99,8 @@ Then read:
 Goal: for each task, the best ratio known to be reachable and what the top teams probably do.
 
 1. Check for new public notebooks. `kaggle kernels list --competition google-verifiable-quantum-circuit-compilation --sort-by dateRun --page-size 50`.
-   A notebook is new when its ref (`owner/slug`) does not appear in `work/INTEL_INDEX.md`
-   (`grep -F "<ref>" work/INTEL_INDEX.md`). When a title claims an LB above our best, or above the
+   A notebook is new when its ref (`owner/slug`) with the same last-run date does not appear in
+   `work/INTEL_INDEX.md` (`grep -F "<ref>" work/INTEL_INDEX.md`). When a title claims an LB above our best, or above the
    public plateau, read it following skill `gathering-vqcc-intel`, steps 3 and 6. Record per-task
    ratios and technique there. Do not verify circuits yourself. Instead, put "verify public X" into
    that task's directive.
@@ -192,8 +192,8 @@ happens. Any write to that task's DIRECTIVE.md wakes the worker. For a parked ta
   directive as usual and mark the idea "spike assigned". When the spike's stop rule fires and no TUNE
   item is worth it, its fallback is "park again" (not re-tuning).
 - **PARK**: only when Step 2b has been done for this task this night and its file has no untested or
-  desk-checked idea with a gain ≥ ~3% if it works, or when the usage guard is close (`seven_day_pct` ≥ 90 in
-  `state/usage.json`). "No known or public structure left" is not a reason: do Step 2b first. Do not
+  desk-checked idea with a gain ≥ ~3% if it works, or when the usage guard is close (`seven_day_pct` in
+  `state/usage.json` within ~10 points of `VQCC_SEVEN_DAY_LIMIT`, default 90). "No known or public structure left" is not a reason: do Step 2b first. Do not
   write that task's DIRECTIVE.md at all (even an identical rewrite wakes the worker); record
   "PARK — <reason>" in STRATEGY.md タスク別配分 and in the log. Do not issue HOLD for a parked task:
   HOLD keeps a session running on low-value work.

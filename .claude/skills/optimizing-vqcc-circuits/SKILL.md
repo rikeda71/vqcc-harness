@@ -123,26 +123,22 @@ A quick run before the audit is fine; the audit must pass before full/remote.
   can be regenerated. Record the exact command in NOTES.md.
 - Before any expensive evaluation, check the register contract cheaply (load the circuit, count qubits
   and gates, simulate a handful of inputs with `kickmix`).
-- Run heavy own computations with `nice -n 10`, at most ~2 cores, in the background with a log file.
-- Never use `cd` in Bash; use absolute paths and `git -C`.
 
 ## Step 4: Evaluate
 
 1. Quick tier first: `bin/vqcc-verify <task> <path> --tier quick --label "<idea, params>"`.
    FAIL → read the error, fix, or abandon with a reason in NOTES.md.
-2. If quick PASS and the quick ratio beats the current verified best (or is within noise of it while
-   lowering risk), run a full verification — remote preferred:
-   `bin/vqcc-remote submit <task> <path> --label "<same label>"`; when Kaggle quota or queue is
-   exhausted, use `bin/vqcc-verify <task> <path> --tier full --label ...`.
+2. Escalate to full verification (remote preferred, then a second salt for a new best) exactly as
+   skill `evaluating-vqcc-candidates` Procedure 3–4 says, and read results as it describes.
 3. While a full verification runs, prepare the next candidate (do not idle-wait).
-4. Interpret results exactly as `evaluating-vqcc-candidates` describes; never report a quick score as verified.
 
 ## Step 5: Record
 
 After every evaluated candidate:
 
 1. Update NOTES.md: move the item from "進行中" to "試したこと" with cand_id, tier, status, score,
-   ratio and one line of insight; update "現在のベスト" when a full/remote PASS improves it;
+   ratio and one line of insight; update "現在のベスト" when a candidate that PASSed full/remote on two
+   salts improves it;
    rewrite "次にやること" (top 5, ranked).
 2. When a candidate enters "現在のベスト" (full/remote PASS on two salts), snapshot it with its generator:
    `bin/vqcc-model save <task> <path> --src work/<task>/src --cmd "<regenerate command>" --note "<what changed>"`.
@@ -151,10 +147,9 @@ After every evaluated candidate:
 
 ## Rules that override convenience
 
-- Correct circuits only. Never exploit verifier gaps (unchecked subspaces, seed/salt-specific luck,
-  behaviour tuned to the test shots). The LB re-verifies with a secret salt and hosts audit winners.
-- Never submit to Kaggle, push, read `~/.kaggle/`, or edit `data/`, `ledger/`, `harness/`, `bin/`, `.claude/`,
-  `AGENTS.md`, `models/` (write it only through `bin/vqcc-model save`). Write harness problems to `work/HARNESS_ISSUES.md` and continue with a workaround.
+- AGENTS.md 禁止事項 and このマシンでの注意 apply throughout (correct circuits only, no submit/push,
+  no edits outside `work/`, `nice` for heavy jobs, no `cd`). Write harness problems to
+  `work/HARNESS_ISSUES.md` and continue with a workaround.
 - Nobody answers questions at night. When stuck for more than ~45 minutes on one idea, write down why
   and switch to the next idea.
 - When the Stop hook says the window is closing, start nothing new: collect running results, update

@@ -18,9 +18,7 @@ directly: that bypasses the CPU locks shared by all workers and leaves no ledger
 
 ## Score
 
-- Per task: `ratio = ref / score` (`score` = verifier cost, lower is better; `ref` = official sample's
-  score in `harness/refs.json`). LB = geometric mean of the three ratios (confirmed against the public LB).
-- A +1% ratio on one task = +0.33% LB. A FAIL on the LB = the whole submission is worthless, so
+- `ratio = ref / score` per task, LB = geometric mean of the three (AGENTS.md 目的とスコア). A +1% ratio on one task = +0.33% LB. A FAIL on the LB = the whole submission is worthless, so
   correctness dominates everything.
 
 ## Tiers
@@ -52,8 +50,8 @@ Candidate formats: invsqrt and dqi are a single `.kmb`; dfthcsos is a directory 
    eps+ ≥ 1/16, λ/E_gap/error thresholds, qubit limit, Z_POW use, …). Fix or abandon with the reason in NOTES.md.
 3. If the candidate already has a full/remote PASS in the ledger (from anyone, see step 4), skip to step 4. Otherwise escalate
    to full verification only when quick PASS and the quick ratio beats the verified best by more
-   than the quick-tier noise above (for invsqrt, > ~1e-5 relative)
-   (`bin/vqcc-best`). Prefer remote:
+   than the quick-tier noise above (for invsqrt, > ~1e-5 relative) (`bin/vqcc-best`), or ties it
+   within that noise while lowering a risk (e.g. failure rate, a gray technique removed). Prefer remote:
    - `bin/vqcc-remote submit <task> <path> --label "<same label>"` returns immediately with a job id.
      Up to 5 Kaggle jobs run at once; extra jobs stay `queued` and start automatically.
    - Results arrive via `bin/vqcc-remote poll` (the supervisor runs it every 10 min; calling it yourself is

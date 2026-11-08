@@ -13,7 +13,7 @@
 # or Kaggle stays unreachable (harness/kaggle_health.py).
 #
 # Observe:  herdr --session vqcc     (attach the TUI)     logs: state/logs/supervisor.log
-# Stop now: touch state/STOP          (workers finish their turn and stop; supervisor exits)
+# Stop now: touch state/STOP          (workers get ~5 min to wrap up, then are closed; supervisor exits)
 set -u
 # The whole body is one brace group so bash parses it before running: editing or pulling this
 # file while a night is in progress cannot corrupt the running supervisor.

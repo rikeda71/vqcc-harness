@@ -7,16 +7,60 @@
   },
   "hooks": {
     "Stop": [
-      { "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/stop.sh", "timeout": 30 } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/stop.sh",
+            "timeout": 30
+          }
+        ]
+      }
     ],
     "Notification": [
-      { "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/notify.sh", "timeout": 10 } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/notify.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ],
     "PostToolUse": [
-      { "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/activity.sh", "timeout": 10 } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/activity.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ],
     "UserPromptSubmit": [
-      { "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/activity.sh", "timeout": 10 } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/activity.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/harness/hooks/guard.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "permissions": {
@@ -25,8 +69,8 @@
       "Bash(bin/vqcc-remote *)",
       "Bash(bin/vqcc-best*)",
       "Bash(bin/vqcc-model *)",
-      "Bash(bin/vqcc-status*)",
-      "Bash(git -C work/*)",
+      "Bash(bin/vqcc-standing*)",
+      "Bash(git -C work *)",
       "Read(./**)",
       "Edit(./work/**)",
       "Write(./work/**)"
@@ -34,8 +78,15 @@
     "deny": [
       "Read(~/.kaggle/**)",
       "Bash(cat ~/.kaggle*)",
+      "Bash(*~/.kaggle*)",
+      "Bash(*/.kaggle/*)",
+      "Edit(~/.kaggle/**)",
+      "Write(~/.kaggle/**)",
       "Bash(kaggle competitions submit*)",
       "Bash(bin/vqcc-submit*)",
+      "Bash(*harness/submit.py*)",
+      "Bash(launchctl *)",
+      "Bash(bin/night-supervisor*)",
       "Bash(git push*)",
       "Bash(gh *)",
       "Edit(./data/**)",

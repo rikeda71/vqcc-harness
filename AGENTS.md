@@ -41,14 +41,14 @@
 
 ## 評価 (必ず harness のツールを使う)
 
-- `bin/vqcc-verify <task> <candidate> --tier quick --label "<何を試したか>"` : 数分の高速チェック。足切り用。
+- `bin/vqcc-verify <task> <candidate> --tier quick --label "<何を試したか>"` : 数秒〜数十秒の高速チェック。足切り用。
 - `bin/vqcc-verify <task> <candidate> --tier full --label ...` : 公式 verifier を公式既定値で実行 (LB と同じ判定)。ローカル CPU は全ワーカー共有でロック制御される。
 - `bin/vqcc-remote submit <task> <candidate> --label ...` : Kaggle の CPU notebook で公式 verifier を実行 (LB と同じ kickmix)。**full 検証は可能ならこちらを優先** (Mac の CPU を空けられる)。結果は supervisor が定期的に `bin/vqcc-remote poll` で回収し ledger に入る。自分で `poll`/`status` を呼んでもよい。
 - `bin/vqcc-best` : 各タスクの verified best と予測 LB を表示。
 - `bin/vqcc-standing` : 公開 LB での順位・メダル線・目標までに必要な倍率を表示する (`--no-download` を付けるとキャッシュを使う)。
 - `bin/vqcc-model save <task> <candidate> --src work/<task>/src --cmd "<再生成コマンド>" --note "<変更点>"` :
   「現在のベスト」になった候補を生成コードごと `models/<task>/v<N>/` に版として保存する。`bin/vqcc-model list` で
-  各版の verified ratio と Kaggle の public LB (提出済みなら) を確認できる。`models/<task>/current` が次の提出に使われる版。
+  各版の verified ratio と Kaggle の public LB (提出済みなら) を確認できる。`models/<task>/current` は verified best に対応する版 (= 次に提出される回路)。
 - 正当性監査で不合格・禁止技法と判定した候補は `work/<task>/BLOCKLIST` に `<cand_id> <理由>` を 1 行追記する (verified best・提出から除外される)。
 - 提出候補になるのは full/remote が全て PASS した候補だけ。quick の数値だけで「改善した」と NOTES に書かない (quick の値と明記するのは可)。
 
@@ -93,5 +93,5 @@
 ## ユーザーのグローバル指示との関係
 
 ユーザーのグローバル CLAUDE.md にある「Obsidian へのログ」「サブエージェント最大展開」「tuning-skills の実行」は
-**この夜間ワーカーには適用しない** (Claude サブスクリプションの使用量を節約するため; 使用量が 5h 枠の 90% に達すると全停止する)。
+**この夜間ワーカーには適用しない** (Claude サブスクリプションの使用量を節約するため; 使用量が 5h 枠・7 日枠の上限 (既定 90%) に達すると全停止し、リセット後に再開する)。
 サブエージェントは、並列化で明確に速くなる重い調査・実装に限り同時 2 つまで使ってよい。朝のレポートは supervisor が書く。

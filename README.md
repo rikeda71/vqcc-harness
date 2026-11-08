@@ -70,7 +70,7 @@ VQCC_ROTATE_TOKENS=120000       # ワーカーのコンテキストがこれを�
 VQCC_OBSIDIAN_APPEND=1          # 朝レポートを Obsidian daily に追記 (既定オフ)
 VQCC_STRATEGY_INTERVAL_MIN=240  # 作戦会議 (strategist) の間隔。0 で無効
 VQCC_STRATEGY_TIMEOUT_MIN=45    # 1 回の作戦会議の上限時間
-VQCC_STRATEGY_IDLE_GAP_MIN=60   # ワーカーが待機 (park) に入ったら、前回から最短この分数で作戦会議を前倒し
+VQCC_STRATEGY_IDLE_GAP_MIN=30   # ワーカーが待機 (park) に入ったら、前回から最短この分数で作戦会議を前倒し
 VQCC_TARGET=                    # 目標: gold|silver|bronze|<score>。空 = 1 つ上のメダル線
 VQCC_TEAM_NAME=ikechan          # LB 上のチーム名
 ```

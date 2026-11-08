@@ -53,7 +53,7 @@ VQCC_STRATEGY_TIMEOUT_MIN="${VQCC_STRATEGY_TIMEOUT_MIN:-45}"
 # A worker whose directive is exhausted parks (work/<task>/IDLE, no token use) until DIRECTIVE.md changes.
 # A newly parked worker brings the next strategist pass forward, but not sooner than this many
 # minutes after the previous pass.
-VQCC_STRATEGY_IDLE_GAP_MIN="${VQCC_STRATEGY_IDLE_GAP_MIN:-60}"
+VQCC_STRATEGY_IDLE_GAP_MIN="${VQCC_STRATEGY_IDLE_GAP_MIN:-30}"
 
 # 0 (true) when worker $1 is parked: work/$1/IDLE exists and is not older than work/$1/DIRECTIVE.md.
 vqcc_parked() {

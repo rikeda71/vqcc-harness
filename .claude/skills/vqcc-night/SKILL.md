@@ -68,9 +68,11 @@ Morning prompt (pass it verbatim as the CronCreate `prompt`):
 `stop` (at most 6 lines): the schedule is removed; a running night wraps up in about 5 minutes and still
 writes its report; the morning report was cancelled (or there was none).
 
-`status` (at most 8 lines): schedule ON/OFF (when OFF, quote the `disabled` reason and say nothing
+`status` (at most 12 lines): schedule ON/OFF (when OFF, quote the `disabled` reason and say nothing
 starts until `/vqcc-night`), whether a night is running, the last night's report summary (or that there
 is none yet), the trend in the recent rows of reports/DAILY.md, and the auto-submit block if shown.
+Then one line per task from the `== workers` section: WORKING or PARKED (since when), and why, taken from
+its `|` lines (what it finished, what it is waiting for, e.g. a remote job), plus its active remote jobs.
 
 Do not run `bin/night-supervisor`, `launchctl`, `herdr` or any other command yourself, and do not
 edit files.

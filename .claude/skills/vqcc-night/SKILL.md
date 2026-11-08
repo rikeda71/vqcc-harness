@@ -1,6 +1,6 @@
 ---
 name: vqcc-night
-description: Starts, stops or shows the nightly VQCC harness schedule. Start registers a LaunchAgent that runs bin/night-supervisor every night during the window (default 00:00-08:00) until stopped, starts tonight's run at once if invoked inside the window, and schedules a daily morning `/vqcc-night status` in this session. Used only when the user types "/vqcc-night", "/vqcc-night stop" or "/vqcc-night status".
+description: Starts, stops or shows the nightly VQCC harness schedule. Start registers a LaunchAgent that runs bin/night-supervisor every night during the window (default 00:00-08:00) until stopped, starts tonight's run at once if invoked inside the window, and schedules a daily morning report job (a self-contained prompt) in this session. Used only when the user types "/vqcc-night", "/vqcc-night stop" or "/vqcc-night status".
 disable-model-invocation: true
 argument-hint: "[start|stop|status]"
 allowed-tools: Bash(bin/vqcc-schedule *), CronCreate, CronList, CronDelete
@@ -10,7 +10,21 @@ allowed-tools: Bash(bin/vqcc-schedule *), CronCreate, CronList, CronDelete
 
 Control the nightly schedule with `bin/vqcc-schedule`. The supervisor runs under launchd, detached
 from this Claude session: closing this session never stops it, and this session does no harness work.
-The only thing tied to this session is the morning status check (a session-only cron job).
+The only thing tied to this session is the morning report (a session-only cron job).
+
+A cron prompt reaches the session as plain text, and this skill cannot be invoked by the model, so the
+morning job must not be `/vqcc-night status` (it would do nothing). It is the self-contained prompt below,
+which the session carries out on its own. Its first line is the marker `[vqcc-morning]`.
+
+Morning prompt (pass it verbatim as the CronCreate `prompt`):
+
+```
+[vqcc-morning] VQCC 朝の報告 (/vqcc-night start が登録した定期ジョブ)。リポジトリのルートで、cd を使わず次を行い、日本語で報告する。
+1. `bin/vqcc-schedule status` を実行する。night が RUNNING なら、終了処理中であることと現状だけを報告して終える。
+2. schedule が ON で night が not running のときだけ、`bin/vqcc-schedule start` を 1 回実行し、launchd の起動時刻を設定済みの夜間ウィンドウに合わせ直す (一時的なウィンドウ延長の後始末。ウィンドウ外なので夜間ランは始まらない)。schedule が OFF なら何もしない。これ以外のスケジュール操作・launchctl・提出はしない。
+3. reports/ の最新の夜のレポートを最後まで読み、`bin/vqcc-standing` で現在の順位・メダル線・必要倍率を測る。
+4. 報告: 夜の成果 (task ごとの verified ratio の変化、save した版、提出の有無と public LB)、現在の順位とメダル線との差、各 worker の work/<task>/NOTES.md の現在地と IDLE の要点、work/STRATEGY.md と work/HARNESS_ISSUES.md の新しい「要人間判断」、夜間ランが途中で止まっていればその原因 (status の supervisor log の tail)。最後に今夜への推奨を 3 行以内で。
+```
 
 ## Steps
 
@@ -19,13 +33,15 @@ The only thing tied to this session is the morning status check (a session-only 
 2. Run exactly one command from the repository root (no `cd`; no other commands):
    `bin/vqcc-schedule <action>`
 3. Only after `start` succeeded (no `not started:` in the output) — set up the morning check:
-   - Run CronList. Existing jobs whose prompt is exactly `/vqcc-night status` are the morning check.
-   - If there is one, keep it and create nothing. Otherwise run CronCreate with
+   - Run CronList. Jobs whose prompt starts with `[vqcc-morning]` are the morning report. Jobs whose
+     prompt is exactly `/vqcc-night status` are an old form that does nothing: CronDelete them.
+   - If a `[vqcc-morning]` job exists, keep it and create nothing. Otherwise run CronCreate with
      `cron` = the expression in the output's `morning  : HH:MM (cron "...")` line,
-     `prompt` = `/vqcc-night status`, `recurring` = true, `durable` = false.
+     `prompt` = the morning prompt above, `recurring` = true, `durable` = false.
      Never use `durable: true`: durable jobs fire in every Claude session started in this repo,
      including the night workers.
-4. After `stop` — run CronList and CronDelete every job whose prompt is exactly `/vqcc-night status`.
+4. After `stop` — run CronList and CronDelete every job whose prompt starts with `[vqcc-morning]` or is
+   exactly `/vqcc-night status`.
 5. Report in Japanese (formats below). If a command fails, show its output and stop.
 
 ## Report formats
@@ -34,8 +50,8 @@ The only thing tied to this session is the morning status check (a session-only 
 - Whether tonight's run started now (`tonight's run started now`), was already running
   (`a night is already running`; also `night    : RUNNING`), or will start at the window start; that it
   repeats every night until stopped.
-- Morning check: the time from CronCreate/CronList (the actual next run, not the cron minute); that it
-  lives only in this session (closing it cancels the check, not the nightly runs) and expires after
+- Morning report: the time from CronCreate/CronList (the actual next run, not the cron minute); that it
+  lives only in this session (closing it cancels the report, not the nightly runs) and expires after
   7 days (run `/vqcc-night` again in this session to renew; it is safe while a night is running).
 - Then this guide, verbatim:
   ```
@@ -50,7 +66,7 @@ The only thing tied to this session is the morning status check (a session-only 
   (no cron job).
 
 `stop` (at most 6 lines): the schedule is removed; a running night wraps up in about 5 minutes and still
-writes its report; the morning check was cancelled (or there was none).
+writes its report; the morning report was cancelled (or there was none).
 
 `status` (at most 8 lines): schedule ON/OFF (when OFF, quote the `disabled` reason and say nothing
 starts until `/vqcc-night`), whether a night is running, the last night's report summary (or that there

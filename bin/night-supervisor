@@ -200,6 +200,21 @@ stop_workers() {  # $1 = reason
   vqcc_log "supervisor: stopped workers ($1)"
 }
 
+# A parked worker does not wait for its in-flight remote/full runs. When they have all finished (new
+# ledger records since IDLE, no job of the task still queued/running), move IDLE to
+# state/workers/<w>/IDLE.woken and write state/workers/<w>/woken ("<epoch> <results>"): the worker's
+# background wait (until IDLE is gone) wakes it, or it is restarted / nudged below. It handles the
+# results and parks again; a new IDLE clears the woken files.
+wake_parked() {  # $1 worker
+  local w="$1" wdir="$VQCC_STATE/workers/$1" msg
+  [ "$ROOT/ledger/results.jsonl" -nt "$ROOT/work/$w/IDLE" ] || return 1
+  msg=$("$ROOT/harness/pyrun" "$ROOT/harness/workers.py" wake-check "$w" 2>/dev/null) || return 1
+  mv "$ROOT/work/$w/IDLE" "$wdir/IDLE.woken" || return 1
+  echo "$(date +%s) $msg" > "$wdir/woken"; rm -f "$wdir/woken_nudged"
+  vqcc_log "supervisor: woke parked $w (results arrived: $msg)"
+}
+WAKE_MSG="(supervisor) 待機中に検証結果が出たので起こしました (state/workers/WORKER/woken)。skill optimizing-vqcc-circuits の「Park」4 に従い、state/workers/WORKER/IDLE.woken の待ち条件どおりに結果を処理してから、再び待機してください。"
+
 nudge() {  # $1 worker, $2 text
   local p; p=$(wpane "$1"); [ -n "$p" ] || return 0
   hd pane send-keys "$p" esc >/dev/null 2>&1; sleep 1
@@ -209,7 +224,10 @@ nudge() {  # $1 worker, $2 text
 }
 
 STRAT_LAST=0; PAUSED=0; LAST_POLL=0; KFAIL=0; END_REASON=""; SUBMITTED_TONIGHT=0; LAST_SUBMIT_TRY=0; START_TS=$(date +%s)
-for w in $VQCC_WORKERS; do mkdir -p "$VQCC_STATE/workers/$w"; echo 0 > "$VQCC_STATE/workers/$w/restarts"; done
+for w in $VQCC_WORKERS; do
+  mkdir -p "$VQCC_STATE/workers/$w"; echo 0 > "$VQCC_STATE/workers/$w/restarts"
+  rm -f "$VQCC_STATE/workers/$w/woken" "$VQCC_STATE/workers/$w/IDLE.woken" "$VQCC_STATE/workers/$w/woken_nudged"
+done
 
 if vqcc_over_limit; then
   PAUSED=1; vqcc_log "supervisor: usage over limit at start ($(vqcc_usage)); waiting for reset"
@@ -260,6 +278,13 @@ while :; do
       start_worker "$w" fresh
       continue
     fi
+    # Woken worker parked again: the new IDLE supersedes the woken files.
+    if [ -f "$wdir/woken" ] && [ "$ROOT/work/$w/IDLE" -nt "$wdir/woken" ]; then
+      rm -f "$wdir/woken" "$wdir/IDLE.woken" "$wdir/woken_nudged"
+    fi
+    if vqcc_parked "$w" && wake_parked "$w" && ! worker_alive "$w" && [ ! -f "$wdir/STOP" ]; then
+      start_worker "$w"; continue  # a wake is not a crash: no restart budget used
+    fi
     if ! worker_alive "$w"; then
       if [ -f "$wdir/STOP" ]; then continue; fi
       # Parked (directive exhausted): stay down until the strategist rewrites DIRECTIVE.md.
@@ -290,6 +315,14 @@ while :; do
       if [ $(( now - wts )) -ge 180 ]; then
         rm -f "$wdir/waiting"
         nudge "$w" "(supervisor) この操作の承認者はいません。拒否されたものとして扱い、許可されている手段 (bin/vqcc-* や work/ 内のスクリプト) で代替してください。作業を続行してください。"
+      fi
+    fi
+    # Woken for finished results: its wait command should have fired; if nothing happened for 3 min, nudge once.
+    hb=$(cat "$wdir/heartbeat" 2>/dev/null || echo "$now")
+    if [ -f "$wdir/woken" ] && [ ! -f "$wdir/woken_nudged" ]; then
+      read -r wk _ < "$wdir/woken"
+      if [ $(( now - wk )) -ge 180 ] && [ "$hb" -lt "$wk" ]; then
+        touch "$wdir/woken_nudged"; nudge "$w" "${WAKE_MSG//WORKER/$w}"
       fi
     fi
     # Unparked by a new DIRECTIVE.md: the worker's background wait command should wake it; if that

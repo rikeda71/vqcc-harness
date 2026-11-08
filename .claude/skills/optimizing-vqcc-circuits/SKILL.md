@@ -56,21 +56,28 @@ start a genuinely new structural idea, or park:
    Record it in NOTES.md "指令との差分" (idea, expected gain, stop rule) and run it like a directive
    item. Otherwise park: hand an idea that needs more design to the strategist through IDLE.
 2. To park: record finished results (`bin/vqcc-remote status`, local logs) in NOTES. Do not wait for
-   jobs still running: put their job ids / log paths in NOTES "進行中" and in IDLE (the supervisor polls
-   remote jobs into the ledger; read them when you wake). Then write `work/<task>/IDLE` with the time
+   jobs still running: put their job ids / log paths in NOTES "進行中" and in IDLE, with what to do when they
+   finish (e.g. "両 PASS なら save"). The supervisor polls remote jobs into the ledger and wakes you when
+   all of this task's remote jobs have finished (see 4). Then write `work/<task>/IDLE` with the time
    (`YYYY-MM-DD HH:MM`), one line per exhausted item (its result), running jobs, and up to 3 structural
    ideas for the strategist with expected ratio gain.
    Update NOTES.md 現在地 ("parked: DIRECTIVE 消化済み, 新指令待ち") and commit.
 3. Start this wait with Bash `run_in_background: true` (absolute paths):
-   `until [ ! -f <root>/work/<task>/IDLE ] || [ <root>/work/<task>/DIRECTIVE.md -nt <root>/work/<task>/IDLE ]; do sleep 60; done; echo DIRECTIVE updated`
+   `until [ ! -f <root>/work/<task>/IDLE ] || [ <root>/work/<task>/DIRECTIVE.md -nt <root>/work/<task>/IDLE ]; do sleep 60; done; echo woken`
    Then end the turn with a one-line report. The Stop hook lets a parked worker stop; the session uses
-   no tokens until the strategist rewrites DIRECTIVE.md and the wait command wakes you.
-4. When woken (wait command finished, or a supervisor/hook notice about a new directive): delete
-   `work/<task>/IDLE`, re-read DIRECTIVE.md and continue from Step 2. If the new directive still gives
-   nothing to do (e.g. the strategist chose to keep this task parked), park again from 2.
+   no tokens until the strategist rewrites DIRECTIVE.md or the supervisor wakes you for finished results.
+4. When woken (wait command finished, or a supervisor/hook notice), find out why:
+   - `state/workers/<task>/woken` exists → the supervisor woke you because the in-flight runs finished.
+     It moved your IDLE to `state/workers/<task>/IDLE.woken`; the woken file lists the new results. Do
+     what IDLE.woken said to do with them (record in NOTES, save, quick → remote of a follow-up the
+     directive lists), then, if the directive is still exhausted, park again from 2 (leave the woken files;
+     the supervisor removes them once your new IDLE exists). Do not start unrelated work.
+   - Otherwise DIRECTIVE.md was updated: delete `work/<task>/IDLE`, re-read DIRECTIVE.md and continue
+     from Step 2. If the new directive still gives nothing to do (e.g. the strategist chose to keep
+     this task parked), park again from 2.
 5. On a session start or restart, if `work/<task>/IDLE` exists and DIRECTIVE.md is not newer than it,
    you are still parked: check for finished in-flight results only, then go straight to 3. If
-   DIRECTIVE.md is newer than IDLE, you were unparked: do 4.
+   DIRECTIVE.md is newer than IDLE, or `state/workers/<task>/woken` exists, you were woken: do 4.
 
 Without a directive, or for anything it leaves open (but see "Park" above once it is exhausted), pick from "次にやること" in NOTES.md, ranked by
 (expected ratio gain) × (probability it passes) ÷ (hours). Prefer, in order:

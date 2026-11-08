@@ -98,6 +98,31 @@ def short() -> str:
     return " / ".join(parts)
 
 
+def wake_check(task: str) -> str | None:
+    """For a parked task: a one-line summary of the full/remote results recorded since it parked, once none
+    of its remote jobs is still queued/running (a pair of salts wakes the worker once, not twice); else None."""
+    w = ROOT / "work" / task
+    idle, d = w / "IDLE", w / "DIRECTIVE.md"
+    if not idle.exists() or (d.exists() and d.stat().st_mtime > idle.stat().st_mtime) or _remote_jobs()[task]:
+        return None
+    sys.path.insert(0, str(ROOT / "harness"))
+    import ledger  # noqa: E402
+    since = dt.datetime.fromtimestamp(idle.stat().st_mtime).astimezone()
+    new = [r for r in ledger.records() if r.get("task") == task and r.get("tier") in ("full", "remote")
+           and dt.datetime.fromisoformat(r["ts"]) > since]
+    if not new:
+        return None
+    return "; ".join(f"{r['cand_id']} {r['tier']}{'/' + r['salt'] if r.get('salt') else ''} {r['status']}"
+                     + (f" ratio {r['ratio']:.5f}" if r.get("ratio") else "") for r in new[-6:])
+
+
 if __name__ == "__main__":
+    # workers.py                  -> the worker-state lines (bin/vqcc-schedule status)
+    # workers.py wake-check TASK  -> exit 0 and print the new results when a parked TASK should be woken
+    if len(sys.argv) == 3 and sys.argv[1] == "wake-check":
+        msg = wake_check(sys.argv[2])
+        if msg:
+            print(msg)
+        sys.exit(0 if msg else 1)
     print("\n".join(lines()))
     sys.exit(0)

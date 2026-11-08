@@ -79,6 +79,51 @@ def model_version(task: str, cand_id: str) -> str | None:
     return None
 
 
+_KV_BLOCK = re.compile(r"^-{21}(Request|Response)-{21,22}$")
+_KV_END = "-" * 50
+_SECRET_FIELD = re.compile(r'("(?:token|blobFileTokens|blob_file_tokens|createUrl|create_url|[A-Za-z_]*[Tt]oken)"\s*:\s*)'
+                           r'("(?:[^"\\]|\\.)*"|\[[^\]]*\])')
+_URL_QUERY = re.compile(r"(https?://[^\s\"'?]+)\?[^\s\"']*")
+_AUTH_HEADER = re.compile(r"(?i)^\s*(proxy-)?(authorization|cookie|set-cookie|x-[a-z-]*(token|key|auth)[a-z-]*)\s*:")
+_AUTH_VALUE = re.compile(r"(?i)\b(bearer|basic)\s+\S+|\b(KGAT_)\w+")
+
+
+def sanitize_kaggle_output(stdout: str, stderr: str) -> tuple[str, str, str]:
+    """Strip what the kaggle CLI prints with VERBOSE=1 down to what is safe to log.
+
+    The verbose client prints every HTTP request (its headers carry the API credentials) and every
+    response. Request blocks and all headers are dropped; only the status line and body of the
+    responses are kept (signed URLs lose their query string, token-like JSON fields are masked), so
+    a 400 from CreateSubmission leaves Kaggle's reason in state/submissions.jsonl. stderr loses the
+    `logging` DEBUG/INFO lines that VERBOSE turns on. Returns (stdout, stderr, last response)."""
+    out, responses, block, cur = [], [], None, []
+    for line in stdout.splitlines():
+        m = _KV_BLOCK.match(line)
+        if m:
+            block, cur = m.group(1), []
+            continue
+        if block is not None:
+            if line == _KV_END:
+                if block == "Response" and cur:
+                    status, rest = cur[0], cur[1:]
+                    body = "\n".join(rest[rest.index("") + 1:]) if "" in rest else ""
+                    responses.append(f"{status} {body}".strip())
+                block = None
+            else:
+                cur.append(line)
+            continue
+        out.append(line)
+
+    def clean(s: str) -> str:
+        # Safety net in case the CLI changes its banners: drop credential headers, mask auth schemes/keys.
+        s = "\n".join(l for l in s.splitlines() if not _AUTH_HEADER.match(l))
+        s = _AUTH_VALUE.sub(lambda m: f"{m.group(1)} <redacted>" if m.group(1) else "<redacted>", s)
+        return _URL_QUERY.sub(r"\1?<redacted>", _SECRET_FIELD.sub(r'\1"<redacted>"', s))
+
+    err = "\n".join(l for l in stderr.splitlines() if not re.match(r"^(DEBUG|INFO):", l))
+    return clean("\n".join(out)), clean(err), clean(responses[-1]) if responses else ""
+
+
 def choose() -> dict:
     refs = ledger.load_refs()
     comps = {}
@@ -321,11 +366,16 @@ def main() -> int:
         name = now.strftime("%Y%m%dT%H%M%SZ")
         zpath = build_zip(choice, name)
         msg = f"vqcc-harness pred={choice['predicted']:.5f} " + " ".join(f"{t}={i}" for t, i in ids.items())
+        # VERBOSE=1 makes the CLI print Kaggle's response body (the reason of a 400); the raw output
+        # also holds credentials, so only the sanitized form is logged.
         r = subprocess.run(["kaggle", "competitions", "submit", COMP, "-f", str(zpath), "-m", msg],
-                           capture_output=True, text=True, timeout=3600)
+                           capture_output=True, text=True, timeout=3600, env={**os.environ, "VERBOSE": "1"})
+        out, err, resp = sanitize_kaggle_output(r.stdout, r.stderr)
         rec.update({"zip": str(zpath), "message": msg, "returncode": r.returncode,
-                    "stdout": r.stdout[-2000:], "stderr": r.stderr[-2000:], "submitted": r.returncode == 0})
-        rec["reason"] = "submitted" if r.returncode == 0 else "kaggle submit failed"
+                    "stdout": out[-2000:], "stderr": err[-2000:], "kaggle_response": resp[-2000:],
+                    "submitted": r.returncode == 0})
+        rec["reason"] = "submitted" if r.returncode == 0 else (
+            "kaggle submit failed" + (f": {' '.join(resp.split())[:300]}" if resp else ""))
     log(rec)
     print(json.dumps({k: rec[k] for k in ("submitted", "reason", "predicted", "prev_best_predicted",
                                            "best_public", "used_today")}))

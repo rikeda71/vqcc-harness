@@ -40,6 +40,8 @@ competition's standing, which this worker cannot see. Follow it:
   error, λ, qubit peak, quick ratio) toward its target, keep going past the time box (up to 2×) even if
   the target looks out of reach: a smaller verified gain still counts. Stop an item only after at least
   2 different methods for its blocker gave no improvement, and record the methods and numbers.
+  At the 2× cap, verify the best candidate in hand, record where the metric stands, and go to the next
+  item (the strategist can reissue it).
 - Call something no-go only on evidence (a proof, a BRIEF / hard-limit violation, a verifier fact, a
   measured prototype), not on a napkin estimate.
 - In RESTRUCTURE mode, do not spend the session on parameter re-tuning (item 4 below) until the
@@ -80,7 +82,7 @@ Either continue with something that still makes progress, or park:
    - `state/workers/<task>/woken` exists → the supervisor woke you because the in-flight runs finished.
      It moved your IDLE to `state/workers/<task>/IDLE.woken`; the woken file lists the new results. Do
      what IDLE.woken said to do with them (record in NOTES, save, quick → remote of a follow-up the
-     directive lists), then, if the directive is still exhausted, park again from 2 (leave the woken files;
+     directive or your 指令との差分 entry lists), then, if the directive is still exhausted, park again from 2 (leave the woken files;
      the supervisor removes them once your new IDLE exists). Do not start unrelated work.
    - Otherwise DIRECTIVE.md was updated: delete `work/<task>/IDLE`, re-read DIRECTIVE.md and continue
      from Step 2. If the new directive still gives nothing to do (e.g. the strategist chose to keep
@@ -113,6 +115,11 @@ BRIEF.md / BRIEF_OVERVIEW.md override any recommendation elsewhere in the briefs
 area, host ruling pending), do not use the technique and note it in NOTES.md "知見".
 Exception: when the task's BRIEF.md states a human-decided failure-rate policy (dqi: §6, rare failures with true
 rate ≲1e-5 under the input distribution are allowed), apply that policy instead of "correct on every input".
+Choose between such candidates by expected ratio, never by which salt happened to give 0 failures. A dqi
+failure does not fail the run; it raises the cost through R(ε+) (BRIEF §1.2). E = ratio₀ × Σ_k Poisson(k; λ)
+× R(0)/R(k), with ratio₀ the 0-failure ratio, λ = p × 102,400 shots, p the analytic per-shot failure rate;
+for small λ, E ≈ ratio₀ × (1 − 0.0046 λ). `bin/vqcc-best` ranks by verified ratio, not E: a candidate
+that loses on E but would top `bin/vqcc-best` keeps a BLOCKLIST line stating the E comparison.
 Audit concretely: simulate the circuit (or its loader) on every address including out-of-range ones and
 on arbitrary initial target words, and check outputs and phases against the contract in the task's
 BRIEF.md; keep the audit script in `work/<task>/src/` and reuse it. If a public circuit fails the audit,
@@ -158,7 +165,10 @@ After every evaluated candidate:
 - AGENTS.md 禁止事項 and このマシンでの注意 apply throughout (correct circuits only, no submit/push,
   no edits outside `work/`, `nice` for heavy jobs, no `cd`). Write harness problems to
   `work/HARNESS_ISSUES.md` and continue with a workaround.
-- Nobody answers questions at night. When one method has made no progress for ~90 minutes, write down
+- Nobody answers questions, and nobody approves anything: do not hold a candidate or an item waiting
+  for a human decision. A question you cannot settle from BRIEF / AGENTS.md / the directive goes to the
+  strategist (IDLE or NOTES "指令との差分"), whose ruling is final; meanwhile follow the stricter reading
+  and keep working. When one method has made no progress for ~90 minutes, write down
   why and try a different method for the same blocker; move to the next idea after 2 different methods
   gave nothing (see Step 2).
 - When the Stop hook says the window is closing, start nothing new: collect running results, update

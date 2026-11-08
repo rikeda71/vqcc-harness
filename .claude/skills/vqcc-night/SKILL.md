@@ -1,8 +1,8 @@
 ---
 name: vqcc-night
-description: Starts, stops or shows the nightly VQCC harness schedule. Start registers a LaunchAgent that runs bin/night-supervisor every night during the window (default 00:00-08:00) until stopped, starts tonight's run at once if invoked inside the window, and schedules a daily morning report job (a self-contained prompt) in this session. Used only when the user types "/vqcc-night", "/vqcc-night stop" or "/vqcc-night status".
+description: Starts, stops, restarts or shows the nightly VQCC harness schedule. Start registers a LaunchAgent that runs bin/night-supervisor every night during the window (default 00:00-08:00) until stopped, starts tonight's run at once if invoked inside the window, and schedules a daily morning report job (a self-contained prompt) in this session. Used only when the user types "/vqcc-night", "/vqcc-night stop", "/vqcc-night restart" or "/vqcc-night status".
 disable-model-invocation: true
-argument-hint: "[start|stop|status]"
+argument-hint: "[start|stop|restart|status]"
 allowed-tools: Bash(bin/vqcc-schedule *), CronCreate, CronList, CronDelete
 ---
 
@@ -28,11 +28,12 @@ Morning prompt (pass it verbatim as the CronCreate `prompt`):
 
 ## Steps
 
-1. Map the argument to one action: empty or `start` → `start`; `stop` → `stop`; `status` → `status`.
-   Anything else (e.g. `restart`): run nothing; show the usage line `/vqcc-night [start|stop|status]`.
+1. Map the argument to one action: empty or `start` → `start`; `stop` → `stop`; `restart` → `restart`;
+   `status` → `status`. Anything else: run nothing; show the usage line `/vqcc-night [start|stop|restart|status]`.
 2. Run exactly one command from the repository root (no `cd`; no other commands):
-   `bin/vqcc-schedule <action>`
-3. Only after `start` succeeded (no `not started:` in the output) — set up the morning check:
+   `bin/vqcc-schedule <action>`. `restart` waits for the running night to end (up to 20 min): run it with
+   `run_in_background: true` and wait for its completion notice.
+3. Only after `start` or `restart` succeeded (no `not started:` in the output) — set up the morning check:
    - Run CronList. Jobs whose prompt starts with `[vqcc-morning]` are the morning report. Jobs whose
      prompt is exactly `/vqcc-night status` are an old form that does nothing: CronDelete them.
    - If a `[vqcc-morning]` job exists, keep it and create nothing. Otherwise run CronCreate with
@@ -64,6 +65,12 @@ Morning prompt (pass it verbatim as the CronCreate `prompt`):
 - If it printed `not started: ...`: say the competition is over or Kaggle is unreachable, quote the
   reason, suggest checking the `kaggle` CLI login when it looks like an auth error (401/403), and stop
   (no cron job).
+
+`restart` (at most 8 lines): that the previous night ended (its report was written) and a new run started
+ now and lasts until the window end, using the code and settings as of now; that unfinished work inside the
+ worker sessions was cut off (they resume from NOTES.md, remote jobs on Kaggle continue); the first
+ auto-submit check comes 90 minutes after the new start. If it printed `outside the window` or `still running`,
+ quote it and stop.
 
 `stop` (at most 6 lines): the schedule is removed; a running night wraps up in about 5 minutes and still
 writes its report; the morning report was cancelled (or there was none).

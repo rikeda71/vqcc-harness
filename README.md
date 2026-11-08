@@ -28,10 +28,11 @@ bin/ のコマンドは `harness/pyrun` 経由で `uv run --frozen --offline --p
 |---|---|
 | `/vqcc-night` | 毎晩の実行を登録する。ウィンドウ内 (00:00–08:00) なら今夜の分を即開始、それ以外は次の 00:00 から。止め方・status の見方を案内し、そのセッションに毎朝 08:20 頃の `/vqcc-night status` を予約する (セッション限定・7 日で失効、再実行で更新) |
 | `/vqcc-night status` | 登録状態・実行中か・前夜の成果 |
+| `/vqcc-night restart` | 実行中の夜を約 5 分で片付けて終了 (レポートは書く) し、ウィンドウ内ならその場で新しい夜を開始 (終了時刻まで)。途中で入れたコード・設定の変更を反映する。登録はそのまま |
 | `/vqcc-night stop` | 登録を解除する。実行中の夜は約 5 分で片付けて終了 (レポートは書く)。朝の status 予約も消す |
 
 supervisor は launchd (`~/Library/LaunchAgents/com.rikeda71.vqcc-harness.plist`) から起動されるので、
-skill を実行した claude セッションを閉じても、Mac を再起動しても止まらない。中身は `bin/vqcc-schedule start|stop|status`。
+skill を実行した claude セッションを閉じても、Mac を再起動しても止まらない。中身は `bin/vqcc-schedule start|stop|restart|status`。
 コンペが終了したとき、または Kaggle に接続できない状態が続いたとき (開始時に 5 分おき 6 回、夜間は 10 分おき 3 回連続で失敗)
 は自動で登録を解除し `state/DISABLED` に理由を残す。再開は `/vqcc-night`。
 00:00 に Mac がスリープしていると起動は復帰時になる。蓋を閉じない・自動スリープしない設定にしておく。

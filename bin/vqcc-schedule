@@ -6,6 +6,9 @@
 #                              immediately. Stays registered (also across reboots) until `stop`, or
 #                              until the supervisor disables it (competition over / Kaggle unreachable).
 #   bin/vqcc-schedule stop     unregister it and end a running night (workers wrap up, ~5 min grace)
+#   bin/vqcc-schedule restart  end the running night (workers wrap up, ~5 min grace, report written) and,
+#                              inside the window, start a new run at once that lasts until the window end
+#                              (picks up code/config changed since the night started). Keeps the schedule.
 #   bin/vqcc-schedule status   registration, running night, last night's report summary
 #
 # The supervisor runs under launchd, detached from any Claude session, so closing the claude
@@ -127,6 +130,23 @@ case "${1:-status}" in
       echo "schedule removed"
     fi
     status ;;
+  restart)
+    if ! vqcc_in_window; then
+      echo "outside the window ($VQCC_WINDOW_START-$VQCC_WINDOW_END): nothing restarted"; exit 1
+    fi
+    p=$(sup_pid)
+    if [ -n "$p" ]; then
+      # Same ending as `stop` (workers wrap up, report written), but the schedule stays registered.
+      touch "$VQCC_STATE/STOP"
+      vqcc_log "schedule: restart requested; ending night (supervisor pid $p)"
+      echo "ending the running night (supervisor pid $p, state/STOP); waiting for it to exit (~5-10 min)..."
+      for _ in $(seq 1 120); do kill -0 "$p" 2>/dev/null || break; sleep 10; done
+      if kill -0 "$p" 2>/dev/null; then
+        echo "supervisor pid $p still running after 20 min; not starting a new run (check state/logs/supervisor.log)"; exit 1
+      fi
+      echo "previous night ended: $(tail -n 1 "$VQCC_STATE/logs/supervisor.log")"
+    fi
+    exec "$0" start ;;
   status) status ;;
-  *) echo "usage: bin/vqcc-schedule start|stop|status" >&2; exit 2 ;;
+  *) echo "usage: bin/vqcc-schedule start|stop|restart|status" >&2; exit 2 ;;
 esac

@@ -104,7 +104,7 @@ Goal: for each task, the best ratio known to be reachable and what the top teams
 ## Step 3: Work backwards from the target
 
 1. Target: a target the human names (in the request, or `VQCC_TARGET`, which the human sets in
-   `harness/config.local.sh`) always wins; pass it as `bin/vqcc-standing --target <gold|silver|bronze|score>`. Otherwise use `primary_target` from `state/standing.json`,
+   `state/config.local.sh`) always wins; pass it as `bin/vqcc-standing --target <gold|silver|bronze|score>`. Otherwise use `primary_target` from `state/standing.json`,
    which is the next medal line above us. When the next line is within ~0.5% in `x product` of it
    (bronze and silver often sit on the same plateau), target the higher of the two. Also note a stretch target one level higher. Use
    `days_left` to set how ambitious to be.

@@ -1,0 +1,6 @@
+#!/bin/bash
+# Public Kaggle discussions as Markdown under data/intel/discussions/ (harness/discussions.py). Untrusted data.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/harness/config.sh"
+export VQCC_COMPETITION
+exec "$ROOT/harness/pyrun" "$ROOT/harness/discussions.py" "$@"

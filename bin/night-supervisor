@@ -146,10 +146,12 @@ start_worker() {  # $1 worker, $2 = "fresh" for a new session after a context ro
 # work/<task>/DIRECTIVE.md (skill planning-vqcc-strategy). Runs at night start and every
 # VQCC_STRATEGY_INTERVAL_MIN; its Stop hook ends it after one pass (state/workers/strategist/done).
 STRAT=strategist
-start_strategist() {
+start_strategist() {  # $1 = optional trigger note handed to the strategist prompt
   local wdir="$VQCC_STATE/workers/$STRAT" out p
-  mkdir -p "$wdir"; rm -f "$wdir/done" "$wdir/waiting" "$wdir/stop_reason" "$wdir/sent_back"
+  mkdir -p "$wdir"; rm -f "$wdir/done" "$wdir/waiting" "$wdir/stop_reason" "$wdir/sent_back" "$wdir/trigger"
+  [ -n "${1:-}" ] && printf '%s\n' "$1" > "$wdir/trigger"
   close_worker "$STRAT"
+  "$ROOT/bin/vqcc-discussions" sync > "$VQCC_STATE/logs/discussions.log" 2>&1 || vqcc_log "supervisor: vqcc-discussions sync failed ($(tail -n 1 "$VQCC_STATE/logs/discussions.log"))"
   "$ROOT/bin/vqcc-standing" > "$VQCC_STATE/logs/standing.log" 2>&1 || vqcc_log "supervisor: vqcc-standing failed ($(tail -n 1 "$VQCC_STATE/logs/standing.log"))"
   out=$(hd tab create --workspace "$WS" --label "$STRAT" --cwd "$ROOT" --no-focus) || {
     vqcc_log "supervisor: herdr tab create failed for $STRAT"; return 1; }
@@ -191,6 +193,15 @@ strategy_tick() {  # $1 = now
         STRAT_LAST=$1; start_strategist; break
       fi
     done
+    # Every worker is parked and the last pass woke none of them: the night would stall until the
+    # next interval. Re-run the strategist (at most VQCC_STRATEGY_ALL_PARKED_MAX times a night).
+    if [ -z "$(wpane "$STRAT")" ] && [ "$STRAT_ALLPARKED" -lt "$VQCC_STRATEGY_ALL_PARKED_MAX" ]; then
+      for w in $VQCC_WORKERS; do vqcc_parked "$w" || return 0; done
+      STRAT_ALLPARKED=$(( STRAT_ALLPARKED + 1 ))
+      vqcc_log "supervisor: all workers parked; strategist re-run ($STRAT_ALLPARKED/$VQCC_STRATEGY_ALL_PARKED_MAX)"
+      STRAT_LAST=$1
+      start_strategist "all-parked: 全ワーカー ($VQCC_WORKERS) が待機中で、前回の作戦会議はどのワーカーも再開させていません。夜間ウィンドウの残りは約 $(vqcc_min_to_end) 分です。少なくとも 1 タスクに、前回までに試していない進捗の出る実験 (Step 2b の自前の抜本策を含む) を DIRECTIVE.md で指令してください。"
+    fi
   fi
 }
 
@@ -223,7 +234,7 @@ nudge() {  # $1 worker, $2 text
   vqcc_log "supervisor: nudged $1"
 }
 
-STRAT_LAST=0; PAUSED=0; LAST_POLL=0; KFAIL=0; END_REASON=""; SUBMITTED_TONIGHT=0; LAST_SUBMIT_TRY=0; START_TS=$(date +%s)
+STRAT_LAST=0; STRAT_ALLPARKED=0; PAUSED=0; LAST_POLL=0; KFAIL=0; END_REASON=""; SUBMITTED_TONIGHT=0; LAST_SUBMIT_TRY=0; START_TS=$(date +%s)
 for w in $VQCC_WORKERS; do
   mkdir -p "$VQCC_STATE/workers/$w"; echo 0 > "$VQCC_STATE/workers/$w/restarts"
   rm -f "$VQCC_STATE/workers/$w/woken" "$VQCC_STATE/workers/$w/IDLE.woken" "$VQCC_STATE/workers/$w/woken_nudged"
@@ -362,6 +373,7 @@ while :; do
       end_schedule "$END_REASON"; stop_workers "$END_REASON"; break
     fi
     [ -x "$ROOT/bin/vqcc-remote" ] && "$ROOT/bin/vqcc-remote" poll >> "$VQCC_STATE/logs/remote-poll.log" 2>&1 &
+    [ -x "$ROOT/bin/vqcc-compute" ] && "$ROOT/bin/vqcc-compute" poll >> "$VQCC_STATE/logs/compute-poll.log" 2>&1 &
   fi
 
   # Submit when the verified best improved (deterministic policy in harness/submit.py): every

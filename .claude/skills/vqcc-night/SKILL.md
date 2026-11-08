@@ -23,7 +23,7 @@ Morning prompt (pass it verbatim as the CronCreate `prompt`):
 1. `bin/vqcc-schedule status` を実行する。night が RUNNING なら、終了処理中であることと現状だけを報告して終える。
 2. schedule が ON で night が not running のときだけ、`bin/vqcc-schedule start` を 1 回実行し、launchd の起動時刻を設定済みの夜間ウィンドウに合わせ直す (一時的なウィンドウ延長の後始末。ウィンドウ外なので夜間ランは始まらない)。出力に `not started:` があればその理由を報告に載せて続ける。schedule が OFF なら何もしない。これ以外のスケジュール操作・launchctl・提出はしない。
 3. status の `last night's report` 行が示すレポートを最後まで読み、`bin/vqcc-standing` で現在の順位・メダル線・必要倍率を測る。
-4. 報告: 夜の成果 (task ごとの verified ratio の変化、save した版、提出の有無と public LB)、現在の順位とメダル線との差、各 worker の work/<task>/NOTES.md の現在地と IDLE の要点、work/STRATEGY.md の「作戦参謀の裁定」と work/HARNESS_ISSUES.md の「要人間対応」のうち前夜の開始以降に追記されたもの (開始時刻はレポート名の night id `YYYYMMDD-HHMM`。項目先頭の日時で選び、日時の無い項目は `git -C work log -p --since=<開始時刻> -- STRATEGY.md HARNESS_ISSUES.md` の追加行で判断する)、夜間ランが途中で止まっていればその原因 (status の supervisor log の tail)。最後に今夜への推奨を 3 行以内で。
+4. 報告: 夜の成果 (task ごとの verified ratio の変化、save した版、提出の有無と public LB)、現在の順位とメダル線との差、各 worker の work/<task>/NOTES.md の現在地と IDLE の要点、work/STRATEGY.md の「作戦参謀の裁定」と work/HARNESS_ISSUES.md の「ハーネス要望」のうち前夜の開始以降に追記されたもの (開始時刻はレポート名の night id `YYYYMMDD-HHMM`。項目先頭の日時で選び、日時の無い項目は `git -C work log -p --since=<開始時刻> -- STRATEGY.md HARNESS_ISSUES.md` の追加行で判断する)、夜間ランが途中で止まっていればその原因 (status の supervisor log の tail)。最後に今夜への推奨を 3 行以内で。
 ```
 
 ## Steps

@@ -1,0 +1,22 @@
+# vqcc-compute settings (no secrets here; the Kaggle token lives in ~/.kaggle and is never read by this tool).
+# Environment overrides: VQCC_COMPUTE_MAX_CONCURRENT_GPU, VQCC_KAGGLE_USER.
+competition = "google-verifiable-quantum-circuit-compilation"
+accelerator = "NvidiaTeslaT4"
+# GPU jobs pushed/running at the same time (submit is refused above this).
+max_concurrent_gpu = 1
+# Rolling 7-day GPU hours (estimated pushed -> finished). Kaggle's own cap is 30 h/week; stay below it.
+weekly_gpu_hours_budget = 25
+# Largest src directory (uncompressed, after excluding .venv/__pycache__/.git), in MB.
+max_src_mb = 1024
+# submit is refused unless state/compute/gpu_check.json is ok=true and younger than this.
+gpu_check_max_age_h = 24
+# --hours default / upper limit (kernel timeout).
+default_hours = 3
+max_hours = 12
+# Wait limit for `gpu-check` (seconds).
+gpu_check_wait_s = 900
+# Delete harness-created private kernel/dataset after the output is collected.
+cleanup = true
+# Only Kaggle objects whose slug starts with <user>/<prefix> are ever deleted by this tool.
+kernel_prefix = "vqcc-gpu-"
+dataset_prefix = "vqcc-src-"

@@ -54,6 +54,9 @@ VQCC_STRATEGY_TIMEOUT_MIN="${VQCC_STRATEGY_TIMEOUT_MIN:-60}"
 # A newly parked worker brings the next strategist pass forward, but not sooner than this many
 # minutes after the previous pass.
 VQCC_STRATEGY_IDLE_GAP_MIN="${VQCC_STRATEGY_IDLE_GAP_MIN:-30}"
+# When every worker stays parked after a pass (none woken), the strategist is re-run after the same gap,
+# at most this many times a night (0 = off), so the night does not stall until the next interval.
+VQCC_STRATEGY_ALL_PARKED_MAX="${VQCC_STRATEGY_ALL_PARKED_MAX:-4}"
 
 # 0 (true) when worker $1 is parked: work/$1/IDLE exists and is not older than work/$1/DIRECTIVE.md.
 vqcc_parked() {

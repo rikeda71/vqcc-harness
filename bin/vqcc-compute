@@ -1,0 +1,4 @@
+#!/bin/sh
+# Run worker optimisation code on Kaggle GPU notebooks. Usage: vqcc-compute {gpu-check|submit|poll|status} ... (see harness/compute.py)
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec "$ROOT/harness/pyrun" "$ROOT/harness/compute.py" "$@"

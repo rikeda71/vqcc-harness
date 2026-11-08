@@ -113,7 +113,7 @@ Legitimacy audit before verifying any circuit (own or public): it must be correc
 register contract, not only on states the verifier happens to reach. Items marked FORBIDDEN or グレー in
 BRIEF.md / BRIEF_OVERVIEW.md override any recommendation elsewhere in the briefs; when in doubt (gray
 area, host ruling pending), do not use the technique and note it in NOTES.md "知見".
-Exception: when the task's BRIEF.md states a human-decided failure-rate policy (dqi: §6, rare failures with true
+Exception: when the task's BRIEF.md states a failure-rate policy (a fixed rule; dqi: §6, rare failures with true
 rate ≲1e-5 under the input distribution are allowed), apply that policy instead of "correct on every input".
 Choose between such candidates by expected ratio, never by which salt happened to give 0 failures. A dqi
 failure does not fail the run; it raises the cost through R(ε+) (BRIEF §1.2). E = ratio₀ × Σ_k Poisson(k; λ)
@@ -163,10 +163,12 @@ After every evaluated candidate:
 ## Rules that override convenience
 
 - AGENTS.md 禁止事項 and このマシンでの注意 apply throughout (correct circuits only, no submit/push,
-  no edits outside `work/`, `nice` for heavy jobs, no `cd`). Write harness problems to
+  no edits outside `work/`, `nice` for heavy jobs, no `cd`). A search or refit that needs more than the
+  Mac's 2 cores runs on Kaggle GPU via `bin/vqcc-compute` (AGENTS.md「評価」); record its job id in
+  NOTES「進行中」. Write harness problems to
   `work/HARNESS_ISSUES.md` and continue with a workaround.
 - Nobody answers questions, and nobody approves anything: do not hold a candidate or an item waiting
-  for a human decision. A question you cannot settle from BRIEF / AGENTS.md / the directive goes to the
+  for approval. A question you cannot settle from BRIEF / AGENTS.md / the directive goes to the
   strategist (IDLE or NOTES "指令との差分"), whose ruling is final; meanwhile follow the stricter reading
   and keep working. When one method has made no progress for ~90 minutes, write down
   why and try a different method for the same blocker; move to the next idea after 2 different methods

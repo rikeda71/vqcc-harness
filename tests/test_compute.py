@@ -215,3 +215,38 @@ def test_poll_collects_and_cleans(env, monkeypatch):
     assert j["state"] == "done" and j["gpu_name"] == "Tesla T4" and j["cleaned"]
     assert (tmp / "work/dfthcsos/out/compute" / j["job_id"] / "result.json").exists()
     assert any(c[:2] == ("kernels", "delete") for c in calls) and any(c[:2] == ("datasets", "delete") for c in calls)
+
+
+def test_gpu_hours_use_actual_run_time(env):
+    now = time.time()
+    f = lambda t: time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(t))  # noqa: E731
+    jobs = {
+        # pushed 17 h before it finished, but the kernel itself ran 3.37 h
+        "a": {"job_id": "a", "kind": "gpu", "state": "done", "pushed": f(now - 20 * 3600),
+              "finished": f(now - 3 * 3600), "kernel_wall_s": 12135, "run_wall_s": 12000, "hours": 4},
+        # only run_wall_s known
+        "b": {"job_id": "b", "kind": "gpu", "state": "done", "pushed": f(now - 10 * 3600),
+              "finished": f(now - 1 * 3600), "run_wall_s": 3600, "hours": 4},
+        # still queued on Kaggle for 30 h: no GPU used
+        "q": {"job_id": "q", "kind": "gpu", "state": "pushed", "pushed": f(now - 30 * 3600), "hours": 4},
+        # running for 2 h (queued 10 h before that)
+        "r": {"job_id": "r", "kind": "gpu", "state": "running", "pushed": f(now - 12 * 3600),
+              "started": f(now - 2 * 3600), "hours": 4},
+    }
+    assert abs(compute.gpu_hours_used(jobs, now) - (12135 / 3600 + 1 + 2)) < 0.01
+
+
+def test_args_single_string_is_shlex_split(env):
+    _, src, _ = env
+    write_check()
+    assert compute.cmd_submit(CFG, ns(src, args=["--seeds 'a b' --n 2"])) == 0
+    (job,) = compute.load_jobs().values()
+    assert job["args"] == ["--seeds", "a b", "--n", "2"]
+
+
+def test_args_list_kept(env):
+    _, src, _ = env
+    write_check()
+    assert compute.cmd_submit(CFG, ns(src, args=["--seeds", "file:x.npz,file:y.npz"])) == 0
+    (job,) = compute.load_jobs().values()
+    assert job["args"] == ["--seeds", "file:x.npz,file:y.npz"]

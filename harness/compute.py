@@ -17,6 +17,7 @@ import fcntl
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import sys
 import tarfile
@@ -171,19 +172,30 @@ def make_payload(src: Path, dest: Path) -> None:
 
 
 def gpu_hours_used(jobs: dict[str, dict], now: float | None = None) -> float:
-    """GPU hours in the trailing 7 days, estimated from pushed -> finished (running jobs: until now, capped at timeout)."""
+    """GPU hours in the trailing 7 days, counted by actual run time.
+
+    Finished jobs: the kernel's own wall time (result.json kernel_wall_s, else run_wall_s), ending at `finished`;
+    without either, `started` (or `pushed`) -> `finished`. Running jobs: `started` (or `pushed`) -> now, capped at
+    --hours. Jobs still queued on Kaggle (pushed, not yet RUNNING) use no GPU and count 0.
+    """
     now = now or time.time()
     lo = now - WEEK_S
     tot = 0.0
     for j in jobs.values():
         if j.get("kind") != "gpu":
             continue
-        s = parse_ts(j.get("pushed"))
-        if s is None:
-            continue
+        s = parse_ts(j.get("started")) or parse_ts(j.get("pushed"))
         e = parse_ts(j.get("finished"))
-        if e is None:
+        if e is not None:
+            wall = j.get("kernel_wall_s") or j.get("run_wall_s")
+            if wall:
+                s = e - float(wall)
+            if s is None:
+                continue
+        elif j.get("state") == "running" and s is not None:
             e = min(now, s + float(j.get("hours", 12)) * 3600)
+        else:
+            continue
         tot += max(0.0, min(e, now) - max(s, lo))
     return tot / 3600
 
@@ -373,6 +385,8 @@ def cmd_gpu_check(cfg: dict, a) -> int:
 
 def cmd_submit(cfg: dict, a) -> int:
     hours = a.hours if a.hours is not None else cfg["default_hours"]
+    if len(a.args) == 1 and any(c.isspace() for c in a.args[0]):  # --args "--seed 1 --n 2" given as one string
+        a.args = shlex.split(a.args[0])
     if not 0 < hours <= cfg["max_hours"]:
         raise Refused(f"--hours must be in (0, {cfg['max_hours']}]")
     acc = a.accelerator or cfg["accelerator"]
@@ -431,6 +445,7 @@ def collect(job: dict) -> None:
         job["result_error"] = res.get("error")
         job["exit_code"] = res.get("exit_code")
         job["run_wall_s"] = res.get("run_wall_s")
+        job["kernel_wall_s"] = res.get("kernel_wall_s")
         job["gpu_name"] = (res.get("gpu") or {}).get("gpu_name")
     job["collected"] = any(outdir.iterdir())
     job["out_dir"] = str(outdir)
@@ -469,6 +484,7 @@ def do_poll(cfg: dict) -> dict[str, dict]:
             log(f"{job['job_id']}: {st} -> {job['state']} {job.get('result_error') or ''}")
         elif st == "RUNNING" and job["state"] != "running":
             job["state"] = "running"
+            job["started"] = ledger.now()
         elif st.startswith("UNKNOWN"):
             job["last_error"] = st
         else:
@@ -498,7 +514,7 @@ def main() -> int:
     s.add_argument("task", choices=ledger.TASKS)
     s.add_argument("--src", required=True, help="directory inside work/<task>/")
     s.add_argument("--entry", required=True, help="python file relative to --src")
-    s.add_argument("--args", nargs=argparse.REMAINDER, default=[], help="arguments for the entry. Must be last.")
+    s.add_argument("--args", nargs=argparse.REMAINDER, default=[], help="arguments for the entry. Must be last. A single quoted string is split like a shell (shlex).")
     s.add_argument("--label", default="")
     s.add_argument("--hours", type=float, help="kernel timeout in hours (default/max in compute.toml)")
     s.add_argument("--accelerator")

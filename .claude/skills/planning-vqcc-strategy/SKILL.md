@@ -211,6 +211,10 @@ Pick exactly one mode per task and justify it with numbers:
 | RESTRUCTURE | Velocity has stalled (< ~0.5% per night for 2 nights, or the last ~5 experiments gave < 0.2% each), or the allocated gain is larger than tuning can plausibly give (rule of thumb: > 3–5%), or the dominant cost term in the verifier breakdown is untouched by the current line of work. Name the structural change, its expected gain, and a spike experiment with a progress-based stop rule (see below). |
 | HOLD | Only for a task whose expected gain per hour is far below the others' while a shared resource (remote quota, local CPU) is the bottleneck. The worker then does cheap, low-CPU work: audits, verification backlog, design notes. |
 
+Priority: when the target needs a large `x product` (more than ~5%), the RESTRUCTURE ideas that could deliver
+it come first, above small sure TUNE items that only widen the margin over the line below us; give such
+TUNE only to tasks without an assigned breakthrough or to fill a worker's wait (`作戦参謀の既定値` may name the tasks).
+
 Stop rules judge progress, not arrival. An item stops when its attacked metric (stage cost, error,
 λ, qubit peak, quick ratio) has stopped moving toward the target after at least 2 different methods for
 the blocker, not because it has not reached the target yet. Write them as, for example: "time box 3h;

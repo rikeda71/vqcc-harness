@@ -4,7 +4,7 @@ competition = "google-verifiable-quantum-circuit-compilation"
 accelerator = "NvidiaTeslaT4"
 # GPU jobs pushed/running at the same time (submit is refused above this).
 max_concurrent_gpu = 1
-# Rolling 7-day GPU hours (estimated pushed -> finished). Kaggle's own cap is 30 h/week; stay below it.
+# Rolling 7-day GPU hours, counted by actual kernel run time (queued-on-Kaggle time is not counted). Kaggle's own cap is 30 h/week; stay below it.
 weekly_gpu_hours_budget = 25
 # Largest src directory (uncompressed, after excluding .venv/__pycache__/.git), in MB.
 max_src_mb = 1024

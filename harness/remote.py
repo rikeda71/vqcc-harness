@@ -33,6 +33,7 @@ OUT = STATE / "out"
 LOCK = STATE / ".lock"
 CONF = ROOT / "harness" / "remote.toml"
 TEMPLATE = ROOT / "harness" / "remote_kernel.py"
+COMPUTE_JOBS = ROOT / "state" / "compute" / "jobs.jsonl"
 PAYLOAD = "cand.tar.gz"
 ACTIVE = ("pushed", "running")
 
@@ -43,7 +44,7 @@ def config() -> dict:
     import tomllib
     c = {"competition": "google-verifiable-quantum-circuit-compilation", "max_concurrent": 3,
          "kernel_timeout_s": 43200, "cleanup": True, "kernel_prefix": "vqcc-job-",
-         "dataset_prefix": "vqcc-cand-"}
+         "dataset_prefix": "vqcc-cand-", "hold_while_gpu_running": True}
     if CONF.exists():
         c.update(tomllib.loads(CONF.read_text()))
     if os.environ.get("VQCC_REMOTE_MAX_CONCURRENT"):
@@ -186,8 +187,29 @@ def kernel_status(ref: str) -> str:
 
 # ---------- actions ----------
 
+def gpu_running() -> list[str]:
+    """job_ids of vqcc-compute GPU jobs that Kaggle reports RUNNING (last line per job_id wins)."""
+    last: dict[str, dict] = {}
+    if COMPUTE_JOBS.exists():
+        for line in COMPUTE_JOBS.read_text().splitlines():
+            try:
+                j = json.loads(line)
+                last[j["job_id"]] = j
+            except (json.JSONDecodeError, KeyError, TypeError):
+                pass
+    return [k for k, j in last.items() if j.get("kind") == "gpu" and j.get("state") == "running"]
+
+
 def dispatch(cfg: dict, jobs: dict[str, dict]) -> None:
-    """Push queued jobs (oldest first) while fewer than max_concurrent are pushed/running."""
+    """Push queued jobs (oldest first) while fewer than max_concurrent are pushed/running.
+
+    While a vqcc-compute GPU job is RUNNING (and hold_while_gpu_running), nothing new is pushed."""
+    queued = [j for j in jobs.values() if j["state"] == "queued"]
+    if queued and cfg.get("hold_while_gpu_running", True):
+        gpu = gpu_running()
+        if gpu:
+            log(f"holding {len(queued)} queued job(s) while GPU job {', '.join(gpu)} is running")
+            return
     active = sum(1 for j in jobs.values() if j["state"] in ACTIVE)
     for job in sorted((j for j in jobs.values() if j["state"] == "queued"), key=lambda j: j["submitted"]):
         if active >= cfg["max_concurrent"]:

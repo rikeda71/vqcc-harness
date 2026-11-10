@@ -4,6 +4,10 @@ competition = "google-verifiable-quantum-circuit-compilation"
 # Jobs running/pushed at the same time on Kaggle; further submissions wait in the local queue.
 # Measured: Kaggle rejects the 6th batch CPU session ("Maximum batch CPU session count of 5 reached").
 max_concurrent = 5
+# Push no new verifier kernels while a vqcc-compute GPU job is RUNNING on Kaggle (state/compute/jobs.jsonl),
+# so the GPU job gets the account's session quota. Queued jobs stay queued and are pushed after it ends.
+# A GPU job still queued on Kaggle does not hold anything (it may never start).
+hold_while_gpu_running = true
 # Seconds before Kaggle kills a kernel (passed as `kaggle kernels push -t`). 43200 = the 12 h session maximum.
 kernel_timeout_s = 43200
 # After a job's result is saved under state/remote/out/ and written to the ledger, delete the

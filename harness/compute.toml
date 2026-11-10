@@ -15,6 +15,10 @@ default_hours = 3
 max_hours = 12
 # Wait limit for `gpu-check` (seconds).
 gpu_check_wait_s = 900
+# A job whose kernel has been QUEUED on Kaggle longer than this is re-pushed as a new version (Kaggle can
+# leave a kernel QUEUED forever; a T4 wait is normally minutes). At most max_repush times, then error.
+stale_queued_min = 120
+max_repush = 3
 # Delete harness-created private kernel/dataset after the output is collected.
 cleanup = true
 # Only Kaggle objects whose slug starts with <user>/<prefix> are ever deleted by this tool.

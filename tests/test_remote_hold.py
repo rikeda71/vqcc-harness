@@ -54,3 +54,43 @@ def test_cpu_compute_job_does_not_hold(env):
     write(cj, {"job_id": "c", "kind": "cpu", "state": "running"})
     remote.dispatch(CFG, jobs())
     assert pushed == ["j1"]
+
+
+def _ts(ago_min):
+    import time
+    return time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - ago_min * 60))
+
+
+def test_stale_queued_kernel_is_repushed_then_errors(env, monkeypatch):
+    cj, pushed = env
+    cfg = dict(CFG, stale_queued_min=60, max_repush=2, cleanup=False)
+    monkeypatch.setattr(remote, "kernel_status", lambda ref: "QUEUED")
+    errors = []
+    monkeypatch.setattr(remote, "_ledger_error", lambda job, msg: errors.append(msg))
+    job = {"job_id": "j1", "state": "pushed", "submitted": "1", "pushed": _ts(30), "task": "dqi", "cand_id": "c",
+           "kernel_ref": "me/k"}
+    remote.save(job)
+    remote.do_poll(cfg)                       # 30 min: not stale yet
+    assert pushed == []
+    job["pushed"] = _ts(90)
+    remote.save(job)
+    remote.do_poll(cfg)                       # 90 min: re-pushed
+    assert pushed == ["j1"]
+    j = remote.load_jobs()["j1"]
+    assert j["repushes"] == 1 and j["state"] == "pushed"
+    remote.do_poll(cfg)                       # just re-pushed: the clock restarts
+    assert pushed == ["j1"]
+    j["repushed"] = _ts(90)
+    j["repushes"] = 2
+    remote.save(j)
+    remote.do_poll(cfg)                       # max_repush reached: error, ledger notified
+    assert remote.load_jobs()["j1"]["state"] == "error" and errors
+
+
+def test_running_kernel_is_not_repushed(env, monkeypatch):
+    cj, pushed = env
+    monkeypatch.setattr(remote, "kernel_status", lambda ref: "RUNNING")
+    remote.save({"job_id": "j1", "state": "pushed", "submitted": "1", "pushed": _ts(600), "task": "dqi",
+                 "cand_id": "c", "kernel_ref": "me/k"})
+    remote.do_poll(dict(CFG, stale_queued_min=60, max_repush=3, cleanup=False))
+    assert pushed == [] and remote.load_jobs()["j1"]["state"] == "running"

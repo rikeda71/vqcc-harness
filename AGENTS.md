@@ -47,7 +47,7 @@
 
 - `bin/vqcc-verify <task> <candidate> --tier quick --label "<何を試したか>"` : 数秒〜数十秒の高速チェック。足切り用。
 - `bin/vqcc-verify <task> <candidate> --tier full --label ...` : 公式 verifier を公式既定値で実行 (LB と同じ判定)。ローカル CPU は全ワーカー共有でロック制御される。
-- `bin/vqcc-remote submit <task> <candidate> --label ...` : Kaggle の CPU notebook で公式 verifier を実行 (LB と同じ kickmix)。**full 検証は可能ならこちらを優先** (Mac の CPU を空けられる)。結果は supervisor が定期的に `bin/vqcc-remote poll` で回収し ledger に入る。自分で `poll`/`status` を呼んでもよい。
+- `bin/vqcc-remote submit <task> <candidate> --label ...` : Kaggle の CPU notebook で公式 verifier を実行 (LB と同じ kickmix)。**full 検証は可能ならこちらを優先** (Mac の CPU を空けられる)。結果は supervisor が定期的に `bin/vqcc-remote poll` で回収し ledger に入る。自分で `poll`/`status` を呼んでもよい。Kaggle 側で 60 分以上 QUEUED のままの job は poll が自動で再 push する (最大 3 回、超えると error になりローカル full に切り替える)。
 - `bin/vqcc-best` : 各タスクの verified best と予測 LB を表示。
 - `bin/vqcc-standing` : 公開 LB での順位・メダル線・目標までに必要な倍率を表示する (`--no-download` を付けるとキャッシュを使う)。
 - `bin/vqcc-compute` : 自前の重い計算 (最適化・探索・再フィット) を Kaggle の GPU (Tesla T4) notebook で実行し、出力を `work/<task>/out/compute/<job_id>/` に回収する。

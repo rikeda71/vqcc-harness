@@ -8,6 +8,11 @@ max_concurrent = 5
 # so the GPU job gets the account's session quota. Queued jobs stay queued and are pushed after it ends.
 # A GPU job still queued on Kaggle does not hold anything (it may never start).
 hold_while_gpu_running = true
+# Kaggle occasionally leaves a pushed kernel QUEUED forever (2026-11-09: 30 h+ while fresh pushes ran at once).
+# A job whose current kernel version has been QUEUED longer than this is re-pushed as a new version
+# (at most max_repush times, then the job becomes an error and the worker falls back to local full).
+stale_queued_min = 60
+max_repush = 3
 # Seconds before Kaggle kills a kernel (passed as `kaggle kernels push -t`). 43200 = the 12 h session maximum.
 kernel_timeout_s = 43200
 # After a job's result is saved under state/remote/out/ and written to the ledger, delete the

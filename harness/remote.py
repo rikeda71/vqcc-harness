@@ -11,6 +11,7 @@ state/remote/out/<job_id>/ (downloaded kernel output). Stdlib only; talks to the
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import fcntl
 import json
 import os
@@ -44,7 +45,8 @@ def config() -> dict:
     import tomllib
     c = {"competition": "google-verifiable-quantum-circuit-compilation", "max_concurrent": 3,
          "kernel_timeout_s": 43200, "cleanup": True, "kernel_prefix": "vqcc-job-",
-         "dataset_prefix": "vqcc-cand-", "hold_while_gpu_running": True}
+         "dataset_prefix": "vqcc-cand-", "hold_while_gpu_running": True,
+         "stale_queued_min": 60, "max_repush": 3}
     if CONF.exists():
         c.update(tomllib.loads(CONF.read_text()))
     if os.environ.get("VQCC_REMOTE_MAX_CONCURRENT"):
@@ -175,6 +177,20 @@ def push_kernel(job: dict, cfg: dict) -> None:
         p = kaggle("kernels", "push", "-p", str(td), "-t", str(cfg["kernel_timeout_s"]), check=False)
         if p.returncode != 0 or "successfully pushed" not in p.stdout:
             raise RuntimeError("kernels push failed: " + (p.stdout + p.stderr)[-1500:])
+
+
+def parse_ts(s: str | None) -> float | None:
+    try:
+        return dt.datetime.fromisoformat(s).timestamp() if s else None
+    except ValueError:
+        return None
+
+
+def stale_queued(job: dict, cfg: dict, now: float | None = None) -> bool:
+    """Kaggle sometimes leaves a pushed kernel QUEUED forever (seen 2026-11-09: 30 h+, while fresh pushes
+    ran at once). True when the current version has been QUEUED longer than stale_queued_min."""
+    t0 = parse_ts(job.get("repushed") or job.get("pushed"))
+    return t0 is not None and (now or time.time()) - t0 > float(cfg["stale_queued_min"]) * 60
 
 
 def kernel_status(ref: str) -> str:
@@ -342,6 +358,22 @@ def do_poll(cfg: dict) -> dict[str, dict]:
             log(f"{job['job_id']}: {st}")
         elif st == "RUNNING" and job["state"] != "running":
             job["state"] = "running"
+        elif st == "QUEUED" and stale_queued(job, cfg):
+            if job.get("repushes", 0) >= cfg["max_repush"]:
+                _ledger_error(job, f"kernel stuck QUEUED on Kaggle after {job.get('repushes', 0)} re-pushes")
+                job["state"] = "error"
+                job["finished"] = ledger.now()
+                log(f"{job['job_id']}: still QUEUED after {job.get('repushes', 0)} re-pushes -> error")
+            else:  # a new kernel version replaces the stuck one
+                try:
+                    push_kernel(job, cfg)
+                except Exception as e:  # noqa: BLE001
+                    job["last_error"] = str(e)[-1500:]
+                    log(f"{job['job_id']}: re-push failed: {job['last_error'][-300:]}")
+                job["repushes"] = job.get("repushes", 0) + 1
+                job["repushed"] = ledger.now()
+                log(f"{job['job_id']}: QUEUED > {cfg['stale_queued_min']} min on Kaggle -> re-pushed "
+                    f"({job['repushes']}/{cfg['max_repush']})")
         elif st.startswith("UNKNOWN"):
             job["last_error"] = st
         else:

@@ -55,7 +55,8 @@ def config() -> dict:
     c = {"competition": "google-verifiable-quantum-circuit-compilation", "accelerator": "NvidiaTeslaT4",
          "max_concurrent_gpu": 1, "weekly_gpu_hours_budget": 25, "max_src_mb": 1024,
          "gpu_check_max_age_h": 24, "default_hours": 3, "max_hours": 12, "gpu_check_wait_s": 900,
-         "cleanup": True, "kernel_prefix": "vqcc-gpu-", "dataset_prefix": "vqcc-src-"}
+         "cleanup": True, "kernel_prefix": "vqcc-gpu-", "dataset_prefix": "vqcc-src-",
+         "stale_queued_min": 120, "max_repush": 3}
     if CONF.exists():
         c.update(tomllib.loads(CONF.read_text()))
     if os.environ.get("VQCC_COMPUTE_MAX_CONCURRENT_GPU"):
@@ -410,12 +411,7 @@ def cmd_submit(cfg: dict, a) -> int:
         save(job)
         try:
             ensure_dataset(job["dataset_ref"], src)
-            push_kernel(job["kernel_ref"],
-                        {"job_id": job_id, "mode": "run", "entry": str(entry), "args": a.args,
-                         "payload": PAYLOAD, "dataset_slug": job["dataset_ref"].split("/", 1)[1],
-                         "gpu_required": not a.cpu, "run_timeout_s": int(hours * 3600) - 300},
-                        gpu=not a.cpu, accelerator=None if a.cpu else acc, timeout_s=int(hours * 3600),
-                        dataset_ref=job["dataset_ref"], competition=cfg["competition"])
+            push_job(job, cfg)
         except Exception as e:  # noqa: BLE001
             job.update(state="error", finished=ledger.now(), last_error=str(e)[-1500:], collected=True)
             save(job)
@@ -426,6 +422,23 @@ def cmd_submit(cfg: dict, a) -> int:
     log(f"{job_id}: pushed -> https://www.kaggle.com/code/{job['kernel_ref']}")
     print(job_id)
     return 0
+
+
+def push_job(job: dict, cfg: dict) -> None:
+    gpu = job["kind"] == "gpu"
+    push_kernel(job["kernel_ref"],
+                {"job_id": job["job_id"], "mode": "run", "entry": job["entry"], "args": job["args"],
+                 "payload": PAYLOAD, "dataset_slug": job["dataset_ref"].split("/", 1)[1],
+                 "gpu_required": gpu, "run_timeout_s": int(job["hours"] * 3600) - 300},
+                gpu=gpu, accelerator=job.get("accelerator") if gpu else None, timeout_s=int(job["hours"] * 3600),
+                dataset_ref=job["dataset_ref"], competition=cfg["competition"])
+
+
+def stale_queued(job: dict, cfg: dict, now: float | None = None) -> bool:
+    """Kaggle sometimes leaves a pushed kernel QUEUED forever (2026-11-09: 30 h+ while fresh pushes ran at
+    once). True when the current version has been QUEUED longer than stale_queued_min."""
+    t0 = parse_ts(job.get("repushed") or job.get("pushed"))
+    return t0 is not None and (now or time.time()) - t0 > float(cfg["stale_queued_min"]) * 60
 
 
 def outdir_for(job: dict) -> Path:
@@ -485,6 +498,21 @@ def do_poll(cfg: dict) -> dict[str, dict]:
         elif st == "RUNNING" and job["state"] != "running":
             job["state"] = "running"
             job["started"] = ledger.now()
+        elif st == "QUEUED" and stale_queued(job, cfg):
+            if job.get("repushes", 0) >= cfg["max_repush"]:
+                job.update(state="error", finished=ledger.now(), collected=True,
+                           result_error=f"kernel stuck QUEUED on Kaggle after {job.get('repushes', 0)} re-pushes")
+                log(f"{job['job_id']}: still QUEUED after {job.get('repushes', 0)} re-pushes -> error")
+            else:  # a new kernel version replaces the stuck one
+                try:
+                    push_job(job, cfg)
+                except Exception as e:  # noqa: BLE001
+                    job["last_error"] = str(e)[-1500:]
+                    log(f"{job['job_id']}: re-push failed: {job['last_error'][-300:]}")
+                job["repushes"] = job.get("repushes", 0) + 1
+                job["repushed"] = ledger.now()
+                log(f"{job['job_id']}: QUEUED > {cfg['stale_queued_min']} min on Kaggle -> re-pushed "
+                    f"({job['repushes']}/{cfg['max_repush']})")
         elif st.startswith("UNKNOWN"):
             job["last_error"] = st
         else:

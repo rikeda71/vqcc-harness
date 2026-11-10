@@ -250,3 +250,22 @@ def test_args_list_kept(env):
     assert compute.cmd_submit(CFG, ns(src, args=["--seeds", "file:x.npz,file:y.npz"])) == 0
     (job,) = compute.load_jobs().values()
     assert job["args"] == ["--seeds", "file:x.npz,file:y.npz"]
+
+
+def test_stale_queued_gpu_job_is_repushed(env, monkeypatch):
+    _, src, calls = env
+    write_check()
+    assert compute.cmd_submit(CFG, ns(src)) == 0
+    (job,) = compute.load_jobs().values()
+    job["pushed"] = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - 3 * 3600))
+    compute.save(job)
+    monkeypatch.setattr(compute, "kernel_status", lambda ref: "QUEUED")
+    monkeypatch.setattr(compute, "resolve_gpu_check", lambda cfg: "none")
+    cfg = dict(CFG, stale_queued_min=120, max_repush=3)
+    compute.do_poll(cfg)
+    pushes = [c for c in calls if c[0] == "push"]
+    assert len(pushes) == 2 and pushes[1][2]["gpu"] is True and pushes[1][2]["accelerator"] == "NvidiaTeslaT4"
+    j = compute.load_jobs()[job["job_id"]]
+    assert j["repushes"] == 1 and j["state"] == "pushed"
+    compute.do_poll(cfg)                      # clock restarted at the re-push
+    assert len([c for c in calls if c[0] == "push"]) == 2

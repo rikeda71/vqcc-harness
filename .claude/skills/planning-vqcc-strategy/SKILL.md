@@ -211,9 +211,9 @@ Pick exactly one mode per task and justify it with numbers:
 | RESTRUCTURE | Velocity has stalled (< ~0.5% per night for 2 nights, or the last ~5 experiments gave < 0.2% each), or the allocated gain is larger than tuning can plausibly give (rule of thumb: > 3–5%), or the dominant cost term in the verifier breakdown is untouched by the current line of work. Name the structural change, its expected gain, and a spike experiment with a progress-based stop rule (see below). |
 | HOLD | Only for a task whose expected gain per hour is far below the others' while a shared resource (remote quota, local CPU) is the bottleneck. The worker then does cheap, low-CPU work: audits, verification backlog, design notes. |
 
-Priority: when the target needs a large `x product` (more than ~5%), the RESTRUCTURE ideas that could deliver
-it come first, above small sure TUNE items that only widen the margin over the line below us; give such
-TUNE only to tasks without an assigned breakthrough or to fill a worker's wait (`作戦参謀の既定値` may name the tasks).
+Priority: until we are inside the target zone (the gold zone by default), the RESTRUCTURE ideas that could reach it
+come first, above small sure TUNE items that only keep or regain a lower medal line, even when we have just dropped
+below one. Small TUNE fills only the wait time of breakthrough work (`作戦参謀の既定値` may name the tasks).
 
 Stop rules judge progress, not arrival. An item stops when its attacked metric (stage cost, error,
 λ, qubit peak, quick ratio) has stopped moving toward the target after at least 2 different methods for
@@ -233,7 +233,7 @@ IDLE against the stop rule above: an item stopped while its metric was still imp
 because the time box ran out) was stopped too early; reissue it with the remaining extension as item 1.
 Then, for a parked task choose one:
 - **New RESTRUCTURE / TUNE**: a genuinely different structure (not a re-tune or variant of an exhausted
-  item) that attacks the dominant cost term, or, when the next medal line is within ×1.001, a sure small
+  item) that attacks the dominant cost term, or, when the next medal line is within ×1.001 (only within the Priority rule above), a sure small
   gain (a few Toffoli / T / qubits). Take it from `work/strategy/breakthrough/<task>.md` (Step 2b) or from
   the worker's ideas in IDLE, and give it a progress-based stop rule (below). Then write the directive as
   usual and mark the idea "spike assigned". List the next 2–3 ranked ideas as later items, so that the

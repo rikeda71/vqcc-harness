@@ -130,7 +130,7 @@ Goal: for each task, the best ratio known to be reachable and what the top teams
    `work/INTEL_INDEX.md` (`discussion#<id>`, date, task, what it says, what it means for us). Act on it
    in the same pass: a proven lower bound closes the matching breakthrough idea (mark it no-go in
    `work/strategy/breakthrough/<task>.md` and cite the topic); a new technique or a higher claimed LB
-   becomes a directive item; a host rule clarification goes to `work/BRIEF_OVERVIEW.md`「ルール解釈」.
+   becomes a directive item, ranked first (Step 4 Priority 1); a host rule clarification goes to `work/BRIEF_OVERVIEW.md`「ルール解釈」.
    An INTEL_INDEX line someone else already wrote records the reading, not the action: still check that
    the breakthrough file and directives reflect it. Treat a bound as proven only when the topic ships a
    proof or exhaustive-search code and someone else confirms it (or our own runs agree); otherwise record
@@ -211,9 +211,17 @@ Pick exactly one mode per task and justify it with numbers:
 | RESTRUCTURE | Velocity has stalled (< ~0.5% per night for 2 nights, or the last ~5 experiments gave < 0.2% each), or the allocated gain is larger than tuning can plausibly give (rule of thumb: > 3–5%), or the dominant cost term in the verifier breakdown is untouched by the current line of work. Name the structural change, its expected gain, and a spike experiment with a progress-based stop rule (see below). |
 | HOLD | Only for a task whose expected gain per hour is far below the others' while a shared resource (remote quota, local CPU) is the bottleneck. The worker then does cheap, low-CPU work: audits, verification backlog, design notes. |
 
-Priority: until we are inside the target zone (the gold zone by default), the RESTRUCTURE ideas that could reach it
-come first, above small sure TUNE items that only keep or regain a lower medal line, even when we have just dropped
-below one. Small TUNE fills only the wait time of breakthrough work (`作戦参謀の既定値` may name the tasks).
+Priority (default order of directive items and of your pass time; deviate when the numbers clearly say
+so, and write why in 今回の判断):
+1. **Strong discussion intel** (Step 1b): a technique, cost number or lower bound from a discussion that
+   applies to our current best, or a claimed LB above ours with a described method. Turn it into an item
+   (IMPORT / reproduce / close the matching idea) in the same pass, ahead of everything else, because it is
+   the cheapest evidence-backed gain.
+2. **Gold-scale breakthroughs**: until we are inside the target zone (the gold zone by default), the
+   RESTRUCTURE ideas that could reach it (Step 2b), above small sure TUNE items that only keep or regain a
+   lower medal line, even when we have just dropped below one.
+3. **Nits**: small TUNE (a few Toffoli / T / qubits, margin refits). They fill only the wait time of the
+   items above (`作戦参謀の既定値` may name the tasks).
 
 Stop rules judge progress, not arrival. An item stops when its attacked metric (stage cost, error,
 λ, qubit peak, quick ratio) has stopped moving toward the target after at least 2 different methods for
@@ -233,8 +241,9 @@ IDLE against the stop rule above: an item stopped while its metric was still imp
 because the time box ran out) was stopped too early; reissue it with the remaining extension as item 1.
 Then, for a parked task choose one:
 - **New RESTRUCTURE / TUNE**: a genuinely different structure (not a re-tune or variant of an exhausted
-  item) that attacks the dominant cost term, or, when the next medal line is within ×1.001 (only within the Priority rule above), a sure small
-  gain (a few Toffoli / T / qubits). Take it from `work/strategy/breakthrough/<task>.md` (Step 2b) or from
+  item) that attacks the dominant cost term, or, when the next medal line is within ×1.001 (as Priority 3 above), a sure small
+  gain (a few Toffoli / T / qubits). That small gain stays a later item behind an open breakthrough idea
+  and is item 1 only when the task has none; the issuing thresholds below apply to new ideas, not to it. Take it from `work/strategy/breakthrough/<task>.md` (Step 2b) or from
   the worker's ideas in IDLE, and give it a progress-based stop rule (below). Then write the directive as
   usual and mark the idea "spike assigned". List the next 2–3 ranked ideas as later items, so that the
   worker moves on instead of parking when one stops.

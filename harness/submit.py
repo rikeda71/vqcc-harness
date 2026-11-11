@@ -4,9 +4,14 @@ Policy for --auto (every check is recorded; the first failing one is the "reason
   * Kaggle's submission list must be readable. It is synced first into state/kaggle_submissions.json
     (our submissions only, matched by the message we write: status, public score, the cand_ids
     and model versions it contained, our prediction)
-  * state/SUBMIT_BLOCKED must not exist. It is created when one of our Kaggle submissions comes back
-    as ERROR, or scores more than LB_GAP_BLOCK below its prediction (the LB disagrees with our
-    verification): a human reviews and deletes the file
+  * state/SUBMIT_BLOCKED must not exist. It is created when one of our Kaggle submissions scores more
+    than LB_GAP_BLOCK below its prediction (our verification no longer predicts the LB): a human
+    reviews and deletes the file
+  * a submission that comes back as ERROR does not stop auto-submit: its candidates are "suspects"
+    and are left out of the selection (the next verified candidate of that task is used instead;
+    error_suspects). The suspects of an ERROR submission are released once any one of its candidates
+    is put on its task's BLOCKLIST (the culprit was identified); a candidate is also released when a
+    COMPLETE submission of ours contained it
   * no earlier submission of ours may still be scoring on Kaggle (learn its result first)
   * every component must be "verified": all full/remote ledger runs of that candidate PASS
     (ledger.verified_best); tasks without one fall back to the official sample (ratio 1.0)
@@ -124,11 +129,28 @@ def sanitize_kaggle_output(stdout: str, stderr: str) -> tuple[str, str, str]:
     return clean("\n".join(out)), clean(err), clean(responses[-1]) if responses else ""
 
 
-def choose() -> dict:
+def error_suspects(ours: list[dict]) -> dict[str, dict[str, str]]:
+    """{task: {cand_id: Kaggle ref}} for the candidates of our ERROR submissions that are still
+    suspects (see the module docstring for when they are released)."""
+    cleared = {(t, i) for k in ours if k.get("status") == "complete" for t, i in k.get("ids", {}).items()}
+    out: dict[str, dict[str, str]] = {}
+    for k in ours:
+        if k.get("status") != "error":
+            continue
+        ids = k.get("ids", {})
+        if any(i in ledger.blocklist(t) for t, i in ids.items()):
+            continue
+        for t, i in ids.items():
+            if i != "sample" and (t, i) not in cleared:
+                out.setdefault(t, {})[i] = str(k.get("ref"))
+    return out
+
+
+def choose(exclude: dict[str, dict[str, str]] | None = None) -> dict:
     refs = ledger.load_refs()
     comps = {}
     for task in ledger.TASKS:
-        best = ledger.verified_best(task)
+        best = ledger.verified_best(task, exclude=(exclude or {}).get(task, {}))
         if best is not None and task in refs:
             comps[task] = {"cand_id": best["cand_id"], "path": str(ledger.stored_path(task, best["cand_id"])),
                            "score": best["score"], "ratio": refs[task] / best["score"], "label": best["label"],
@@ -237,7 +259,8 @@ def parse_message(desc: str) -> tuple[float | None, dict]:
 
 def sync_kaggle(rows: list[dict]) -> list[dict]:
     """Rewrite state/kaggle_submissions.json from Kaggle's list (ours only, oldest first) and block
-    automatic submission on a new ERROR. Returns the records."""
+    automatic submission when a new COMPLETE score falls far below its prediction (an ERROR is
+    handled by error_suspects instead). Returns the records."""
     ours = []
     for r in rows:
         pred, ids = parse_message(str(r.get("description", "")))
@@ -256,8 +279,6 @@ def sync_kaggle(rows: list[dict]) -> list[dict]:
 
     seen = set(ERR_SEEN.read_text().split()) if ERR_SEEN.exists() else set()
     def bad(k: dict) -> str:
-        if k["status"] == "error":
-            return f"status={k['raw_status']}: the LB rejected a combination our verification passed"
         if (k["status"] == "complete" and k["public"] is not None and k["predicted"]
                 and k["public"] < k["predicted"] * (1 - LB_GAP_BLOCK)):
             return (f"public LB {k['public']} is more than {LB_GAP_BLOCK:.0%} below our prediction "
@@ -292,6 +313,10 @@ def print_history(ours: list[dict]) -> None:
               + f" {comp}")
     if not ours:
         print("(no harness submissions on Kaggle yet)")
+    sus = error_suspects(ours)
+    if sus:
+        print(f"\nERROR suspects left out of auto-submit (task: cand_id -> Kaggle submission): {sus}\n"
+              f"Put the culprit on its work/<task>/BLOCKLIST to release the other candidates of that submission.")
     if BLOCK.exists():
         print(f"\nAUTO-SUBMIT BLOCKED ({BLOCK.relative_to(ROOT)}):\n{BLOCK.read_text().strip()}")
 
@@ -314,19 +339,23 @@ def main() -> int:
         print_history(sync_kaggle(rows))
         return 0
 
-    choice = choose()
+    if a.auto:
+        rows = kaggle_rows()
+        ours = sync_kaggle(rows) if rows is not None else load_ksubs()
+    else:
+        rows, ours = None, load_ksubs()
+    suspects = error_suspects(ours)
+    choice = choose(suspects)
     now = dt.datetime.now(dt.timezone.utc)
     ids = {t: c["cand_id"] for t, c in choice["components"].items()}
     versions = {t: c["version"] for t, c in choice["components"].items()}
     print(json.dumps({"predicted": choice["predicted"], "components": {
         t: {k: c[k] for k in ("cand_id", "version", "score", "ratio", "label")}
-        for t, c in choice["components"].items()}}, indent=2))
+        for t, c in choice["components"].items()}, "excluded_error_suspects": suspects}, indent=2))
 
     if not a.auto:
         return 0
 
-    rows = kaggle_rows()
-    ours = sync_kaggle(rows) if rows is not None else load_ksubs()
     prev = [r for r in past() if r.get("submitted")]
     prev_best = max((r["predicted"] for r in prev), default=0.0)
     public_best = max((k["public"] for k in ours if k["status"] == "complete" and k["public"] is not None),
@@ -340,7 +369,7 @@ def main() -> int:
     pending = [k for k in ours if k["status"] == "pending" and age_h(k["date"], now) < PENDING_MAX_H]
     rec = {"ts": now.isoformat(timespec="seconds"), "predicted": choice["predicted"], "ids": ids,
            "versions": versions, "prev_best_predicted": prev_best, "best_public": public_best,
-           "used_today": used, "submitted": False}
+           "used_today": used, "submitted": False, "excluded_error_suspects": suspects}
 
     if rows is None:
         rec["reason"] = "could not read Kaggle submissions"
@@ -378,7 +407,7 @@ def main() -> int:
             "kaggle submit failed" + (f": {' '.join(resp.split())[:300]}" if resp else ""))
     log(rec)
     print(json.dumps({k: rec[k] for k in ("submitted", "reason", "predicted", "prev_best_predicted",
-                                           "best_public", "used_today")}))
+                                           "best_public", "used_today", "excluded_error_suspects")}))
     return 1 if rec.get("returncode") not in (None, 0) else 0
 
 

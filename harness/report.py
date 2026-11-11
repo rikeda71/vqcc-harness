@@ -93,6 +93,12 @@ def main() -> int:
                      f"{k['predicted'] if k['predicted'] is not None else '-'} | " + " | ".join(comp) + " |")
     if not ks:
         lines.append("| (none) | | | | | | |")
+    import submit  # noqa: PLC0415 (same directory; only for the ERROR-suspect rule)
+    sus = submit.error_suspects(ks)
+    if sus:
+        lines += ["", "**ERROR suspects left out of auto-submit** (candidates of an ERROR submission; put the "
+                  "culprit on its work/<task>/BLOCKLIST to release the others): "
+                  + "; ".join(f"{t}: " + ", ".join(f"{i} (submission {r})" for i, r in c.items()) for t, c in sus.items())]
     if (STATE / "SUBMIT_BLOCKED").exists():
         lines += ["", "**AUTO-SUBMIT BLOCKED** (state/SUBMIT_BLOCKED; delete after review):", "", "```",
                   (STATE / "SUBMIT_BLOCKED").read_text().strip(), "```"]

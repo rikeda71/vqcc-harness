@@ -63,6 +63,8 @@
   「現在のベスト」になった候補を生成コードごと `models/<task>/v<N>/` に版として保存する。`bin/vqcc-model list` で
   各版の verified ratio と Kaggle の public LB (提出済みなら) を確認できる。`models/<task>/current` は verified best に対応する版 (= 次に提出される回路)。
 - 正当性監査で不合格・禁止技法と判定した候補は `work/<task>/BLOCKLIST` に `<cand_id> <理由>` を 1 行追記する (verified best・提出から除外される)。
+- Kaggle で ERROR になった提出の候補 (3 タスク分) は「容疑者」として自動提出の選定から外れる (自動提出は止まらず、そのタスクの次点が使われる)。
+  原因の候補を BLOCKLIST に入れると同じ提出の残りの容疑者は解除される。容疑者の一覧は夜のレポート (`reports/`) の「ERROR suspects」行に出る。
 - 提出候補になるのは full/remote が全て PASS した候補だけ。quick の数値だけで「改善した」と NOTES に書かない (quick の値と明記するのは可)。
 
 ## 禁止事項 (違反は失格・事故につながる)

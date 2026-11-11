@@ -132,8 +132,9 @@ def blocklist(task: str) -> set[str]:
     return {l.split()[0] for l in f.read_text().splitlines() if l.strip() and not l.lstrip().startswith("#")}
 
 
-def verified_best(task: str, min_salts: int = 1) -> dict[str, Any] | None:
-    """Best (lowest score) candidate whose every full/remote run PASSed, with >= min_salts distinct salts."""
+def verified_best(task: str, min_salts: int = 1, exclude: Iterable[str] = ()) -> dict[str, Any] | None:
+    """Best (lowest score) candidate whose every full/remote run PASSed, with >= min_salts distinct salts.
+    BLOCKLISTed candidates and those in `exclude` are skipped."""
     by_cand: dict[str, list[dict[str, Any]]] = {}
     for r in records():
         # ERROR = infrastructure/crash, not evidence about the circuit: ignore it here.
@@ -141,7 +142,7 @@ def verified_best(task: str, min_salts: int = 1) -> dict[str, Any] | None:
                 and r.get("status") in ("PASS", "FAIL")):
             by_cand.setdefault(r["cand_id"], []).append(r)
     best = None
-    blocked = blocklist(task)
+    blocked = blocklist(task) | set(exclude)
     for cand_id, runs in by_cand.items():
         if cand_id in blocked or any(r["status"] != "PASS" for r in runs):
             continue

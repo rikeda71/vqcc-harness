@@ -87,3 +87,26 @@ def test_sync_keeps_progress_when_a_call_fails(mod, monkeypatch):
         mod.cmd_sync(3)
     idx = json.loads(mod.INDEX.read_text())
     assert list(idx["topics"]) == ["1"]
+
+
+def test_ranks_in_render_digest_and_top(mod, monkeypatch):
+    t = {"id": 7, "name": "Plans", "url": "/d/7", "authorUserName": "op",
+         "firstMessage": {"rawMarkdown": "op body", "postDate": "2026-11-01", "competitionRanking": 900},
+         "comments": [{"author": {"displayName": "PJ", "url": "/pj"}, "competitionRanking": 2,
+                       "postDate": "2026-11-02", "rawMarkdown": "bulk experiment",
+                       "replies": [{"author": {"displayName": "Anon", "url": "/anon"}, "postDate": "2026-11-03",
+                                    "rawMarkdown": "no rank"}]}]}
+    md = mod.render(t)
+    assert "author LB rank: #900" in md
+    assert "## comment by PJ (@pj, LB #2) at 2026-11-02" in md
+    assert "### comment by Anon (@anon) at" in md
+    assert mod.posters(t) == [(2, "pj"), (900, "op")]
+    monkeypatch.setattr(mod, "Client", lambda: Fake([row(7, "2026-11-03")], {7: t}))
+    assert mod.cmd_sync(1) == 0
+    assert "top-50 posters: @pj #2" in mod.DIGEST.read_text()
+    out = []
+    monkeypatch.setattr("builtins.print", lambda *a, **k: out.append(" ".join(map(str, a))))
+    mod.cmd_top(50, "")
+    text = "\n".join(out)
+    assert "#2 @pj 2026-11-02 discussion#7" in text and "bulk experiment" in text
+    assert "@op" not in text and "@anon" not in text

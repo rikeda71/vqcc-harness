@@ -116,7 +116,7 @@ close_worker() {  # interrupt the worker, keep its last screen in the logs, clos
 start_worker() {  # $1 worker, $2 = "fresh" for a new session after a context rotation
   local w="$1" wdir="$VQCC_STATE/workers/$1" resume_id="" out p
   mkdir -p "$wdir" "$ROOT/work/$w"
-  rm -f "$wdir/STOP" "$wdir/waiting" "$wdir/continues" "$wdir/rotate" "$wdir/rotate_asked"
+  rm -f "$wdir/STOP" "$wdir/waiting" "$wdir/continues" "$wdir/rotate" "$wdir/rotate_asked" "$wdir/rotate_wait"
   if [ "${2:-}" = fresh ]; then
     rm -f "$wdir/session_id"; resume_id=fresh
   elif [ -s "$wdir/session_id" ] && [ "$(cat "$wdir/night_id" 2>/dev/null)" = "$NIGHT_ID" ]; then
@@ -281,6 +281,19 @@ while :; do
 
   for w in $VQCC_WORKERS; do
     wdir="$VQCC_STATE/workers/$w"
+    # Rotation deferred by the Stop hook for a running background subagent: rotate once the subagent
+    # transcripts and the worker have been quiet for VQCC_SUBAGENT_IDLE_MIN minutes (the subagent ended
+    # or hung without waking the session), or after VQCC_ROTATE_WAIT_MAX_MIN minutes at most.
+    if [ -f "$wdir/rotate_wait" ] && [ ! -f "$wdir/rotate" ]; then
+      sd=$(cat "$wdir/rotate_wait"); idle_s=$(( VQCC_SUBAGENT_IDLE_MIN * 60 ))
+      age_w=$(( now - $(/usr/bin/stat -f %m "$wdir/rotate_wait" 2>/dev/null || echo "$now") ))
+      age_hb=$(( now - $(cat "$wdir/heartbeat" 2>/dev/null || echo 0) ))
+      if [ "$age_w" -ge $(( VQCC_ROTATE_WAIT_MAX_MIN * 60 )) ] || { [ "$age_hb" -ge "$idle_s" ] && \
+           [ -z "$(find "$sd" -name 'agent-*.jsonl' -mmin -"$VQCC_SUBAGENT_IDLE_MIN" 2>/dev/null | head -1)" ]; }; then
+        echo "context $(cat "$wdir/rotate_asked" 2>/dev/null) tokens, after waiting $(( age_w / 60 )) min for a subagent" > "$wdir/rotate"
+        rm -f "$wdir/rotate_wait"
+      fi
+    fi
     # Context rotation: the Stop hook let the worker end after it handed off via NOTES.md.
     # Start a fresh session (not a restart: no budget used, no --resume).
     if [ -f "$wdir/rotate" ]; then

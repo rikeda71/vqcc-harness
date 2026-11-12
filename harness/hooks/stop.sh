@@ -40,12 +40,6 @@ vqcc_parked "$worker" && allow "parked: directive exhausted, waiting for a new D
 
 left=$(vqcc_min_to_end)
 
-# Context rotation (avoid auto-compaction): the worker was asked to hand off -> let it end; the
-# supervisor sees state/workers/<w>/rotate and starts a fresh session.
-if [ -f "$wdir/rotate_asked" ]; then
-  echo "context $(cat "$wdir/rotate_asked") tokens" > "$wdir/rotate"
-  allow "rotate to a fresh session (context $(cat "$wdir/rotate_asked") tokens)"
-fi
 # Current context size = input side of the last assistant turn in the transcript.
 tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
 ctx=0
@@ -54,10 +48,32 @@ if [ -n "$tp" ] && [ -f "$tp" ]; then
         | .message.usage | (.input_tokens // 0) + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)]
         | last // 0' 2>/dev/null || echo 0)
 fi
+# Background subagents of this session write <session>/subagents/agent-*.jsonl; one written in the
+# last VQCC_SUBAGENT_IDLE_MIN minutes counts as still running.
+sadir="${tp%.jsonl}/subagents"
+subagents_active() {
+  [ -n "$tp" ] && [ -d "$sadir" ] || return 1
+  [ -n "$(find "$sadir" -name 'agent-*.jsonl' -mmin -"$VQCC_SUBAGENT_IDLE_MIN" 2>/dev/null | head -1)" ]
+}
+
+# Context rotation (avoid auto-compaction): the worker was asked to hand off -> let it end; the
+# supervisor sees state/workers/<w>/rotate and starts a fresh session. Closing the session kills its
+# background subagents, so while one runs (and the context is below the hard cap) let the session go
+# idle instead: the subagent's completion wakes it, it records the result in NOTES.md and stops again.
+# The supervisor rotates on its own if the wait outlives the subagent (state/workers/<w>/rotate_wait).
+if [ -f "$wdir/rotate_asked" ]; then
+  if subagents_active && [ "${ctx:-0}" -lt "$VQCC_ROTATE_HARD_TOKENS" ] 2>/dev/null; then
+    [ -f "$wdir/rotate_wait" ] || printf '%s\n' "$sadir" > "$wdir/rotate_wait"
+    allow "rotation deferred: background subagent still running (context ${ctx} tokens)"
+  fi
+  rm -f "$wdir/rotate_wait"
+  echo "context $(cat "$wdir/rotate_asked") tokens" > "$wdir/rotate"
+  allow "rotate to a fresh session (context $(cat "$wdir/rotate_asked") tokens)"
+fi
 if [ "${ctx:-0}" -ge "$VQCC_ROTATE_TOKENS" ] 2>/dev/null && [ "$left" -gt "$VQCC_WRAPUP_MIN" ]; then
   echo "$ctx" > "$wdir/rotate_asked"
   vqcc_log "stop-hook[$worker]: context $ctx >= $VQCC_ROTATE_TOKENS, asking for hand-off"
-  msg="コンテキストが約 ${ctx} トークンに達したため、この後 supervisor が新しいセッションに切り替えます (compaction 回避)。新しいセッションは会話履歴を引き継がず work/${worker}/NOTES.md だけを頼りに再開するので、次を行ってから短く報告して停止してください: (1) NOTES.md の「現在地」「進行中」「次にやること」を最新化する。走行中の remote job id・バックグラウンド実行中のローカル検証 (ログファイルのパスと候補) ・途中の仮説や判明した知見も漏れなく書く。(2) 数分で終わるローカル検証は完了を待って ledger に記録し、長いものはそのまま走らせて NOTES に記録する。(3) git -C work add -A && git -C work commit。新しい実験は始めない。"
+  msg="コンテキストが約 ${ctx} トークンに達したため、この後 supervisor が新しいセッションに切り替えます (compaction 回避)。新しいセッションは会話履歴を引き継がず work/${worker}/NOTES.md だけを頼りに再開するので、次を行ってから短く報告して停止してください: (1) NOTES.md の「現在地」「進行中」「次にやること」を最新化する。走行中の remote job id・バックグラウンド実行中のローカル検証 (ログファイルのパスと候補) ・途中の仮説や判明した知見も漏れなく書く。(2) 数分で終わるローカル検証は完了を待って ledger に記録し、長いものはそのまま走らせて NOTES に記録する。(3) git -C work add -A && git -C work commit。新しい実験は始めない。新しい subagent も起動しない。(4) バックグラウンドの subagent が走行中なら、その目的と成果物の置き場所を NOTES.md に書いてから停止する。切り替えは subagent の完了まで待つ。完了通知で起こされたら、結果を NOTES.md に記録してコミットし、再び停止すること。"
   jq -n --arg r "$msg" '{decision: "block", reason: $r}'
   exit 0
 fi

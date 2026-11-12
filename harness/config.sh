@@ -21,6 +21,13 @@ VQCC_RESUME_AFTER_RESET="${VQCC_RESUME_AFTER_RESET:-1}"
 # many tokens, the Stop hook asks it to hand off via NOTES.md and the supervisor restarts it in a
 # fresh session.
 VQCC_ROTATE_TOKENS="${VQCC_ROTATE_TOKENS:-120000}"
+# A rotation waits while a background subagent of the worker is still running (its transcript under
+# <session>/subagents/ was written in the last VQCC_SUBAGENT_IDLE_MIN minutes), because closing the
+# session kills it. The wait ends at VQCC_ROTATE_HARD_TOKENS of context (sessions compact near 165k)
+# or after VQCC_ROTATE_WAIT_MAX_MIN minutes.
+VQCC_ROTATE_HARD_TOKENS="${VQCC_ROTATE_HARD_TOKENS:-155000}"
+VQCC_SUBAGENT_IDLE_MIN="${VQCC_SUBAGENT_IDLE_MIN:-15}"
+VQCC_ROTATE_WAIT_MAX_MIN="${VQCC_ROTATE_WAIT_MAX_MIN:-90}"
 
 # Nightly schedule (bin/vqcc-schedule start|stop|status): a LaunchAgent starts the supervisor at
 # VQCC_WINDOW_START every night until stopped, or until the supervisor disables it because the
@@ -37,6 +44,12 @@ VQCC_WORKERS="${VQCC_WORKERS:-invsqrt dqi dfthcsos}"
 VQCC_HERDR_SESSION="${VQCC_HERDR_SESSION:-vqcc}"  # herdr named session (attach: herdr --session vqcc)
 VQCC_CLAUDE_BIN="${VQCC_CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")}"
 VQCC_PERMISSION_MODE="${VQCC_PERMISSION_MODE:-auto}"
+# Models: the strategist session runs on VQCC_STRATEGIST_MODEL (alias "fable" = latest Fable; empty =
+# the CLI default, as for the task workers). Subagents started by any night session (Agent tool without
+# an explicit model) default to VQCC_SUBAGENT_MODEL via CLAUDE_CODE_SUBAGENT_MODEL; fork subagents always
+# inherit the parent model.
+VQCC_STRATEGIST_MODEL="${VQCC_STRATEGIST_MODEL:-fable}"
+VQCC_SUBAGENT_MODEL="${VQCC_SUBAGENT_MODEL:-sonnet}"
 
 # Submissions: Kaggle allows 5/day (UTC); the harness uses at most this many.
 VQCC_MAX_SUBMITS_PER_DAY="${VQCC_MAX_SUBMITS_PER_DAY:-5}"

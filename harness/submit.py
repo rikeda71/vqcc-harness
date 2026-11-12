@@ -14,7 +14,9 @@ Policy for --auto (every check is recorded; the first failing one is the "reason
     COMPLETE submission of ours contained it
   * no earlier submission of ours may still be scoring on Kaggle (learn its result first)
   * every component must be "verified": all full/remote ledger runs of that candidate PASS
-    (ledger.verified_best); tasks without one fall back to the official sample (ratio 1.0)
+    (ledger.verified_best) on at least MIN_SALTS distinct salts (VQCC_SUBMIT_MIN_SALTS, default 2, as
+    STRATEGY.md 固定規則 3/6 require for "best"; a newer candidate with one salt so far waits and the
+    previous 2-salt best is used); tasks without one fall back to the official sample (ratio 1.0)
   * the exact combination of candidates must not have been submitted before
   * the predicted LB (geometric mean of per-task ratio = ref / score) must beat, by > MIN_GAIN
     (relative), both every previous submission's prediction and the best public score Kaggle
@@ -57,6 +59,7 @@ SAMPLE = ROOT / "data" / "raw" / "sample_submission"
 COMP = os.environ.get("VQCC_COMPETITION", "google-verifiable-quantum-circuit-compilation")
 MAX_PER_DAY = int(os.environ.get("VQCC_MAX_SUBMITS_PER_DAY", "5"))
 MIN_GAIN = 1e-4
+MIN_SALTS = int(os.environ.get("VQCC_SUBMIT_MIN_SALTS", "2"))
 MSG_RE = re.compile(r"vqcc-harness pred=([0-9.]+)\s+(.*)")
 
 
@@ -150,7 +153,7 @@ def choose(exclude: dict[str, dict[str, str]] | None = None) -> dict:
     refs = ledger.load_refs()
     comps = {}
     for task in ledger.TASKS:
-        best = ledger.verified_best(task, exclude=(exclude or {}).get(task, {}))
+        best = ledger.verified_best(task, min_salts=MIN_SALTS, exclude=(exclude or {}).get(task, {}))
         if best is not None and task in refs:
             comps[task] = {"cand_id": best["cand_id"], "path": str(ledger.stored_path(task, best["cand_id"])),
                            "score": best["score"], "ratio": refs[task] / best["score"], "label": best["label"],

@@ -55,3 +55,17 @@ def test_verified_best_skips_excluded(monkeypatch, bl):
     monkeypatch.setattr(ledger, "records", lambda: recs)
     assert ledger.verified_best("dqi")["cand_id"] == "b1"
     assert ledger.verified_best("dqi", exclude={"b1"})["cand_id"] == "b2"
+
+
+def test_choose_waits_for_second_salt(monkeypatch, bl):
+    # b1 is cheaper but has only one salt so far: auto-submit keeps the 2-salt b2 until b1's second salt passes.
+    recs = [{"task": "dqi", "tier": "remote", "status": "PASS", "cand_id": c, "score": s, "salt": salt}
+            for c, s, salt in (("b1", 1.0, ""), ("b2", 2.0, ""), ("b2", 2.0, "s2"))]
+    monkeypatch.setattr(ledger, "records", lambda: recs)
+    monkeypatch.setattr(ledger, "load_refs", lambda: {"dqi": 4.0})
+    monkeypatch.setattr(ledger, "stored_path", lambda t, c: Path("/x"))
+    monkeypatch.setattr(submit, "model_version", lambda t, i: None)
+    assert submit.MIN_SALTS == 2
+    assert submit.choose()["components"]["dqi"]["cand_id"] == "b2"
+    recs.append({"task": "dqi", "tier": "remote", "status": "PASS", "cand_id": "b1", "score": 1.0, "salt": "s2"})
+    assert submit.choose()["components"]["dqi"]["cand_id"] == "b1"

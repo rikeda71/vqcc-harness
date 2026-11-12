@@ -70,6 +70,8 @@
       "Bash(bin/vqcc-best*)",
       "Bash(bin/vqcc-model *)",
       "Bash(bin/vqcc-standing*)",
+      "Bash(bin/vqcc-compute*)",
+      "Bash(bin/vqcc-discussions*)",
       "Bash(git -C work *)",
       "Read(./**)",
       "Edit(./work/**)",

@@ -45,7 +45,8 @@ before writing anything is wasted.
   strategy (targets, thresholds, allocation), and questions a worker leaves in IDLE or NOTES. Rules:
   1. Fixed (a ruling never relaxes them): the limits above and the legitimacy and safety rules in the
      「固定規則」 section of `work/STRATEGY.md` (BRIEF FORBIDDEN / グレー, the dqi failure-rate policy in
-     BRIEF §6, BLOCKLIST lines that give a correctness reason). The 「作戦参謀の既定値」 section (targets,
+     BRIEF §6, BLOCKLIST lines that give a correctness reason), plus any rule the human pinned there
+     (e.g. 固定規則 7, the rebuild track). The 「作戦参謀の既定値」 section (targets,
      park thresholds, selection criteria, allocation) holds defaults: follow them unless evidence says
      otherwise, and then change them by a ruling with the numbers.
   2. A new gray technique is allowed only when the circuit is correct for every valid input,
@@ -234,7 +235,10 @@ so, and write why in 今回の判断):
    RESTRUCTURE ideas that could reach it (Step 2b), above small sure TUNE items that only keep or regain a
    lower medal line, even when we have just dropped below one.
 3. **Nits**: small TUNE (a few Toffoli / T / qubits, margin refits). They fill only the wait time of the
-   items above (`作戦参謀の既定値` may name the tasks).
+   items above (`作戦参謀の既定値` may name the tasks). Not issued while `work/STRATEGY.md` stops them
+   (既定値 2.2 / 7(3)); this also disables the ×1.001 small-gain option under Parked tasks.
+IMPORT of a verified public best that beats ours is cheap and runs alongside the rebuild items (固定規則 7);
+put it first only when it moves us across a line or is Priority-1 intel, and write why in 今回の判断.
 
 Stop rules judge progress, not arrival. An item stops when its attacked metric (stage cost, error,
 λ, qubit peak, quick ratio) has stopped moving toward the target after at least 2 different methods for
@@ -267,7 +271,9 @@ Then, for a parked task choose one:
   wins: for that track, issue the next method instead of parking, whatever `seven_day_pct` is.
 - **PARK**: only when Step 2b has been done for this task this night and no open idea meets the
   threshold above, or when the usage guard is close (`seven_day_pct` within ~10 points of
-  `VQCC_SEVEN_DAY_LIMIT`, default 90). "No known or public structure left" is not a reason: do Step 2b first. Do not
+  `VQCC_SEVEN_DAY_LIMIT`, default 90). A task on a track that a 固定規則 exempts (固定規則 7) is never
+  parked, not even near the usage guard: the supervisor's guard stops it. When this pass was started
+  because all workers parked, at least one task must get a new experiment. "No known or public structure left" is not a reason: do Step 2b first. Do not
   write that task's DIRECTIVE.md at all (even an identical rewrite wakes the worker); record
   "PARK — <reason>" in STRATEGY.md タスク別配分 and in the log. Do not issue HOLD for a parked task:
   HOLD keeps a session running on low-value work.
@@ -281,7 +287,8 @@ Then, for a parked task choose one:
    (the Step 3 table plus the mode), 今回の判断と根拠, 作戦参謀の裁定 (rulings still in force, newest first; drop superseded ones),
    固定規則 (copy verbatim; never drop or relax a line), 作戦参謀の既定値 (carry forward; change a line only
    through a ruling recorded in 作戦参謀の裁定, then edit the line and cite the ruling's time). Start the file with a timestamp and the standing
-   `leaderboard_csv` path.
+   `leaderboard_csv` path. Never leave placeholders (e.g. `*_PLACEHOLDER`, `DQ_R1`) or links to breakthrough
+   sections you have not written yet: write the content first, then the files that cite it.
 2. `work/<task>/DIRECTIVE.md` for each task in `VQCC_WORKERS` except tasks you keep PARKed (Step 4),
    overwritten each pass, using this template. Exception (any pass): leave a running task's directive
    untouched when your decision for it is unchanged (say so in STRATEGY.md), so its work is not

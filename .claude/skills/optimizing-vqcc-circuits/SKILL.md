@@ -22,7 +22,8 @@ For public notebooks and discussions, use skill `gathering-vqcc-intel`.
 1. Read `$VQCC_WORKER` to know the task. Work only in `work/<task>/`.
 2. Read, in this order, whatever exists: `work/<task>/DIRECTIVE.md` (the strategist's current orders,
    see Step 2), `work/<task>/NOTES.md`, `work/<task>/BRIEF.md`,
-   `work/BRIEF_OVERVIEW.md`, `work/HARNESS_ISSUES.md`. On your first session (or when NOTES.md does not
+   `work/BRIEF_OVERVIEW.md`, `work/HARNESS_ISSUES.md`, and the 「固定規則」 section and the latest
+   「作戦参謀の裁定」 entry of `work/STRATEGY.md` (the fixed rules outrank the directive). On your first session (or when NOTES.md does not
    mention it yet), also read `docs/intel/kaggle-vqcc-primer.md` (cost tables, score trade-offs, verifier
    behaviour, invsqrt approximation from an external guide) and note in NOTES.md which ideas apply.
 3. Run `bin/vqcc-best` to see the verified best per task and the predicted LB score.
@@ -56,13 +57,18 @@ competition's standing, which this worker cannot see. Follow it:
 
 When every 優先実験 in DIRECTIVE.md has finished or met its stop rule, do not repeat variations of
 exhausted items that have stopped producing gains: that spends the shared usage budget for nothing.
-Either continue with something that still makes progress, or park:
+Either continue with something that still makes progress, or park.
+Exception: a task on the rebuild track (`work/STRATEGY.md` 固定規則 7, or a directive that says not to
+park) never parks and ignores the usage thresholds below: when its listed methods are exhausted, write
+your own next rebuild method with a spike plan in NOTES.md "指令との差分" (step 1) and run it; only the
+supervisor's usage guard and 固定規則 6 stop it.
 
 1. Continue with an idea that is not in the directive and not a variant of a stopped item, with a
    concrete spike plan (a first candidate you can build and quick-test within ~2 h, plus a progress-based
    stop rule): a structural idea against the dominant cost term (gain ≥ ~1.5% if it works while
    `seven_day_pct` in `state/usage.json` is below 50, else ≥ 3%), or, when the next medal line is within
-   ×1.001 (STRATEGY.md 目標と距離), a sure small gain (a few Toffoli / T / qubits).
+   ×1.001 (STRATEGY.md 目標と距離), a sure small gain (a few Toffoli / T / qubits) — unless
+   STRATEGY.md currently stops small TUNE (既定値 2.2 / 7(3)).
    Record it in NOTES.md "指令との差分" (idea, expected gain, stop rule) and run it like a directive
    item. Otherwise park: hand an idea that needs more design to the strategist through IDLE.
 2. To park: record finished results (`bin/vqcc-remote status`, local logs) in NOTES. Do not wait for

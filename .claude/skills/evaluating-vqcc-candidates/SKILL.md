@@ -53,7 +53,8 @@ Candidate formats: invsqrt and dqi are a single `.kmb`; dfthcsos is a directory 
    than the quick-tier noise above (for invsqrt, > ~1e-5 relative) (`bin/vqcc-best`), or ties it
    within that noise while lowering a risk (e.g. failure rate, a gray technique removed). Prefer remote:
    - `bin/vqcc-remote submit <task> <path> --label "<same label>"` returns immediately with a job id.
-     Up to 5 Kaggle jobs run at once; extra jobs stay `queued` and start automatically.
+     Up to 5 Kaggle jobs run at once; extra jobs stay `queued` and start automatically. New pushes are
+     also held (queued) while a `bin/vqcc-compute` GPU job is RUNNING.
    - Results arrive via `bin/vqcc-remote poll` (the supervisor runs it every 10 min; calling it yourself is
      fine, `--wait SEC` blocks). `bin/vqcc-remote status` lists jobs.
    - Do not pass `--verifier-args` for verification; any non-default args make the run tier=quick.

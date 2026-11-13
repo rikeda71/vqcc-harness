@@ -33,7 +33,9 @@ fi
 [ -f "$VQCC_STATE/STOP" ] && allow "STOP file present"
 [ -f "$wdir/STOP" ] && allow "worker STOP file present"
 vqcc_in_window || allow "outside night window"
-vqcc_over_limit && allow "usage guard: $(vqcc_usage)"
+engine="${VQCC_ENGINE:-claude}"  # this session's engine (harness/worker-launch.sh); agy sessions do not use the Claude quota
+# Over the Claude limit with agy available: no stop here, the engine switch below hands off to agy.
+[ "$engine" = claude ] && vqcc_over_limit && ! vqcc_agy_ok && allow "usage guard: $(vqcc_usage)"
 # Directive exhausted: the worker parked itself (work/<w>/IDLE) and waits, without using tokens, for
 # the strategist to rewrite DIRECTIVE.md (its background wait command then wakes the session).
 vqcc_parked "$worker" && allow "parked: directive exhausted, waiting for a new DIRECTIVE.md"
@@ -44,9 +46,14 @@ left=$(vqcc_min_to_end)
 tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
 ctx=0
 if [ -n "$tp" ] && [ -f "$tp" ]; then
-  ctx=$(tail -n 400 "$tp" | jq -Rn '[inputs | fromjson? | select(.type == "assistant" and .message.usage != null)
-        | .message.usage | (.input_tokens // 0) + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)]
-        | last // 0' 2>/dev/null || echo 0)
+  if [ "$engine" = agy ]; then  # agy transcript_full.jsonl: PLANNER_RESPONSE lines carry the token counts
+    ctx=$(tail -n 400 "$tp" | jq -Rn '[inputs | fromjson? | select(.type == "PLANNER_RESPONSE" and .input_tokens != null)
+          | (.input_tokens // 0) + (.cache_read_tokens // 0)] | last // 0' 2>/dev/null || echo 0)
+  else
+    ctx=$(tail -n 400 "$tp" | jq -Rn '[inputs | fromjson? | select(.type == "assistant" and .message.usage != null)
+          | .message.usage | (.input_tokens // 0) + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)]
+          | last // 0' 2>/dev/null || echo 0)
+  fi
 fi
 # Background subagents of this session write <session>/subagents/agent-*.jsonl; one written in the
 # last VQCC_SUBAGENT_IDLE_MIN minutes counts as still running.
@@ -69,6 +76,16 @@ if [ -f "$wdir/rotate_asked" ]; then
   rm -f "$wdir/rotate_wait"
   echo "context $(cat "$wdir/rotate_asked") tokens" > "$wdir/rotate"
   allow "rotate to a fresh session (context $(cat "$wdir/rotate_asked") tokens)"
+fi
+# Engine switch (Claude Code <-> agy, see harness/AGY.md): new sessions of this role now run on the
+# other engine. Hand off through NOTES.md like a context rotation; the fresh session starts on it.
+want=$(vqcc_engine "$worker")
+if [ "$want" != "$engine" ] && [ "$left" -gt "$VQCC_WRAPUP_MIN" ]; then
+  echo "${ctx:-0}" > "$wdir/rotate_asked"
+  vqcc_log "stop-hook[$worker]: engine switch $engine -> $want ($(vqcc_usage)), asking for hand-off"
+  msg="Claude の使用量に応じて、この役割の実行エンジンを ${engine} から ${want} に切り替えます (harness/AGY.md)。この後 supervisor が新しいセッションを ${want} で起動します。新しいセッションは会話履歴を引き継がず work/${worker}/NOTES.md だけを頼りに再開するので、次を行ってから短く報告して停止してください: (1) NOTES.md の「現在地」「進行中」「次にやること」を最新化する。走行中の remote job id・バックグラウンド実行中のローカル検証 (ログファイルのパスと候補) ・途中の仮説や判明した知見も漏れなく書く。(2) 数分で終わるローカル検証は完了を待って ledger に記録し、長いものはそのまま走らせて NOTES に記録する。(3) git -C work add -A && git -C work commit。新しい実験は始めない。新しい subagent も起動しない。(4) バックグラウンドの subagent が走行中なら、その目的と成果物の置き場所を NOTES.md に書いてから停止する。"
+  jq -n --arg r "$msg" '{decision: "block", reason: $r}'
+  exit 0
 fi
 if [ "${ctx:-0}" -ge "$VQCC_ROTATE_TOKENS" ] 2>/dev/null && [ "$left" -gt "$VQCC_WRAPUP_MIN" ]; then
   echo "$ctx" > "$wdir/rotate_asked"

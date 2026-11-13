@@ -9,7 +9,11 @@ wdir="$ROOT/state/workers/$worker"; mkdir -p "$wdir"
 date +%s > "$wdir/heartbeat"
 rm -f "$wdir/waiting"
 sid="$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null)"
-[ -n "$sid" ] && printf '%s\n' "$sid" > "$wdir/session_id"
+if [ -n "$sid" ]; then
+  printf '%s\n' "$sid" > "$wdir/session_id"
+  # Engine of that session (claude | agy, harness/hooks/agy.sh): a resume must use the same engine.
+  printf '%s\n' "${VQCC_ENGINE:-claude}" > "$wdir/session_engine"
+fi
 # A new strategist directive arrived mid-session: tell the worker (as hook context) once per update.
 d="$ROOT/work/$worker/DIRECTIVE.md"
 if [ -f "$d" ]; then

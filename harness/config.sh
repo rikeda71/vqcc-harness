@@ -51,6 +51,25 @@ VQCC_PERMISSION_MODE="${VQCC_PERMISSION_MODE:-auto}"
 VQCC_STRATEGIST_MODEL="${VQCC_STRATEGIST_MODEL:-fable}"
 VQCC_SUBAGENT_MODEL="${VQCC_SUBAGENT_MODEL:-sonnet}"
 
+# agy (Antigravity CLI, Claude Opus via Google) as a second engine that saves the Claude subscription.
+# A session is launched on agy instead of Claude Code (harness/worker-launch.sh, see harness/AGY.md) when
+#   - the role is in VQCC_AGY_ROLES and the Claude 7-day usage is at/over VQCC_AGY_SEVEN_DAY_PCT (until the
+#     7-day window resets), or
+#   - the Claude usage guard trips (VQCC_FIVE_HOUR_LIMIT / VQCC_SEVEN_DAY_LIMIT): then every role, the
+#     strategist included, runs on agy instead of pausing.
+# A running session whose engine no longer matches hands off via NOTES.md at its next stop and restarts
+# on the other engine (harness/hooks/stop.sh). VQCC_AGY_SEVEN_DAY_PCT=0 turns agy off.
+# Manual switches: state/AGY_OFF (never use agy), state/AGY_FORCE (always use agy for VQCC_AGY_ROLES).
+# An agy session that dies within VQCC_AGY_MIN_ALIVE_S seconds, or reports a quota error, writes
+# state/AGY_FAILED; agy is then not used for VQCC_AGY_FAIL_COOLDOWN_MIN minutes.
+VQCC_AGY_BIN="${VQCC_AGY_BIN:-$(command -v agy || echo "$HOME/.local/bin/agy")}"
+VQCC_AGY_SEVEN_DAY_PCT="${VQCC_AGY_SEVEN_DAY_PCT:-70}"
+VQCC_AGY_ROLES="${VQCC_AGY_ROLES:-invsqrt dqi dfthcsos}"
+VQCC_AGY_MODEL="${VQCC_AGY_MODEL:-claude-opus-5-5-high}"
+VQCC_AGY_STRATEGIST_MODEL="${VQCC_AGY_STRATEGIST_MODEL:-claude-opus-5-5-high}"
+VQCC_AGY_MIN_ALIVE_S="${VQCC_AGY_MIN_ALIVE_S:-120}"
+VQCC_AGY_FAIL_COOLDOWN_MIN="${VQCC_AGY_FAIL_COOLDOWN_MIN:-60}"
+
 # Submissions: Kaggle allows 5/day (UTC); the harness uses at most this many.
 VQCC_MAX_SUBMITS_PER_DAY="${VQCC_MAX_SUBMITS_PER_DAY:-5}"
 VQCC_COMPETITION="google-verifiable-quantum-circuit-compilation"
@@ -116,6 +135,41 @@ vqcc_over_limit() {
     awk -v a="$seven" -v b="$VQCC_SEVEN_DAY_LIMIT" 'BEGIN{exit !(a>=b)}' && return 0
   fi
   return 1
+}
+
+# --- engine helpers (Claude Code / agy) --------------------------------------
+# 0 (true) when agy can be used: enabled, installed, not switched off, no recent failure.
+vqcc_agy_ok() {
+  [ "${VQCC_AGY_SEVEN_DAY_PCT:-0}" -gt 0 ] 2>/dev/null || return 1
+  [ -x "$VQCC_AGY_BIN" ] || return 1
+  [ -f "$VQCC_STATE/AGY_OFF" ] && return 1
+  local f="$VQCC_STATE/AGY_FAILED" m
+  if [ -f "$f" ]; then
+    m=$(/usr/bin/stat -f %m "$f" 2>/dev/null || echo 0)
+    [ $(( $(date +%s) - m )) -lt $(( VQCC_AGY_FAIL_COOLDOWN_MIN * 60 )) ] && return 1
+  fi
+  return 0
+}
+# 0 (true) when the Claude 7-day usage is at/over VQCC_AGY_SEVEN_DAY_PCT and that 7-day window has not
+# reset yet (state/usage.json is only refreshed by Claude sessions, so it goes stale while all run on agy;
+# the recorded reset time ends the agy period).
+vqcc_seven_day_high() {
+  local f="$VQCC_STATE/usage.json" seven resets
+  [ -f "$f" ] || return 1
+  read -r seven resets < <(jq -r '[(.seven_day_pct // "-"), (.seven_day_resets_at // "-")] | map(tostring) | join(" ")' "$f" 2>/dev/null)
+  [ -n "$seven" ] && [ "$seven" != "-" ] || return 1
+  if [ -n "$resets" ] && [ "$resets" != "-" ] && [ "$resets" -le "$(date +%s)" ] 2>/dev/null; then return 1; fi
+  awk -v a="$seven" -v b="$VQCC_AGY_SEVEN_DAY_PCT" 'BEGIN{exit !(a>=b)}'
+}
+# Engine for a new session of role $1 (task worker or "strategist"): prints "agy" or "claude".
+vqcc_engine() {
+  if vqcc_agy_ok; then
+    vqcc_over_limit && { echo agy; return; }
+    case " $VQCC_AGY_ROLES " in
+      *" $1 "*) { [ -f "$VQCC_STATE/AGY_FORCE" ] || vqcc_seven_day_high; } && { echo agy; return; } ;;
+    esac
+  fi
+  echo claude
 }
 
 # --- window helpers ----------------------------------------------------------

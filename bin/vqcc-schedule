@@ -76,6 +76,9 @@ status() {
     echo "night    : not running; no night will start until /vqcc-night (bin/vqcc-schedule start)"
   fi
   echo "usage    : $(vqcc_usage)  (5h% resets_at 7d% age_s)"
+  local w e=""; for w in $VQCC_WORKERS strategist; do e="$e $w=$(cat "$VQCC_STATE/workers/$w/engine" 2>/dev/null || echo claude)->$(vqcc_engine "$w")"; done
+  echo "engine   :$e  (current->next session; harness/AGY.md)"
+  [ -f "$VQCC_STATE/AGY_FAILED" ] && echo "agy      : last failure $(cat "$VQCC_STATE/AGY_FAILED" | head -c 200)"
   echo "== workers (PARKED = finished its directive and waits for the strategist; the | lines are IDLE / NOTES 現在地)"
   "$ROOT/harness/pyrun" "$ROOT/harness/workers.py" 2>/dev/null || echo "(worker state unavailable)"
   echo "== last night's report"

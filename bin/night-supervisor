@@ -246,7 +246,7 @@ for w in $VQCC_WORKERS; do
   rm -f "$VQCC_STATE/workers/$w/woken" "$VQCC_STATE/workers/$w/IDLE.woken" "$VQCC_STATE/workers/$w/woken_nudged"
 done
 
-if vqcc_over_limit; then
+if vqcc_over_limit && ! vqcc_agy_ok; then
   PAUSED=1; vqcc_log "supervisor: usage over limit at start ($(vqcc_usage)); waiting for reset"
 else
   for w in $VQCC_WORKERS; do start_worker "$w"; sleep 20; done
@@ -266,8 +266,9 @@ while :; do
     stop_workers "window closed"; break
   fi
 
-  # Usage guard (Claude subscription 5h / 7d windows).
-  if vqcc_over_limit; then
+  # Usage guard (Claude subscription 5h / 7d windows). While agy can take over (harness/AGY.md), the
+  # sessions move to agy through their Stop hook (engine switch) instead of pausing.
+  if vqcc_over_limit && ! vqcc_agy_ok; then
     if [ "$PAUSED" = 0 ]; then
       PAUSED=1; stop_workers "usage guard $(vqcc_usage)"
       osascript -e 'display notification "Claude usage guard tripped; workers paused" with title "vqcc-harness"' 2>/dev/null
@@ -336,6 +337,11 @@ while :; do
     if hd pane read "$(wpane "$w")" --source visible 2>/dev/null | grep -v '^[[:space:]]*$' | tail -12 | \
        grep -Eqi "hit your (session |weekly |5-hour )?limit|(usage|session|5-hour|weekly) limit (reached|will reset)|limit reached.*resets"; then
       echo "$now" > "$VQCC_STATE/limit_hit"
+      if [ "$(cat "$wdir/engine" 2>/dev/null || echo claude)" = claude ] && vqcc_agy_ok; then
+        # The Claude session cannot continue (limit): restart this role on agy now (hand-off via NOTES.md).
+        vqcc_log "supervisor: limit message in w-$w pane; restarting it on agy"
+        close_worker "$w"; start_worker "$w" fresh; continue
+      fi
       vqcc_log "supervisor: limit message in w-$w pane; pausing all workers for 1h"
       break
     fi

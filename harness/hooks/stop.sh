@@ -81,6 +81,10 @@ fi
 n=$(( $(cat "$wdir/continues" 2>/dev/null || echo 0) + 1 ))
 echo "$n" > "$wdir/continues"
 if [ "$left" -le "$VQCC_WRAPUP_MIN" ]; then
+  # Send the wrap-up instruction once; when the worker stops again it has wrapped up, so let it end
+  # (re-sending the same message made finished workers spin empty turns until the window closed).
+  [ -f "$wdir/wrapup_sent" ] && allow "wrap-up done (window ends in ${left} min)"
+  date +%s > "$wdir/wrapup_sent"
   msg="夜間ウィンドウ終了まで残り約 ${left} 分。新しい長時間実験は始めず、走行中の検証結果を回収して ledger に記録し、work/${worker}/NOTES.md の「現在地」「次にやること」を更新してコミット (work/ のローカル git) してください。終わったら短く報告して停止してよい。"
 else
   read -r five _ seven _ < <(vqcc_usage)

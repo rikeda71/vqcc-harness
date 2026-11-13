@@ -73,6 +73,13 @@
       "Bash(bin/vqcc-compute*)",
       "Bash(bin/vqcc-discussions*)",
       "Bash(git -C work *)",
+      "Bash(mkdir -p work/*)",
+      "Bash(cp data/intel/outputs/* work/*)",
+      "Bash(unzip -q data/intel/outputs/* -d work/*)",
+      "Bash(clang++ *)",
+      "Bash(nice -n 10 clang++ *)",
+      "Bash(c++ *)",
+      "Bash(g++ *)",
       "Read(./**)",
       "Edit(./work/**)",
       "Write(./work/**)"

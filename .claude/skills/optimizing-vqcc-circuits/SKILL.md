@@ -61,7 +61,10 @@ Either continue with something that still makes progress, or park.
 Exception: a task on the rebuild track (`work/STRATEGY.md` 固定規則 7, or a directive that says not to
 park) never parks and ignores the usage thresholds below: when its listed methods are exhausted, write
 your own next rebuild method with a spike plan in NOTES.md "指令との差分" (step 1) and run it; only the
-supervisor's usage guard and 固定規則 6 stop it.
+supervisor's usage guard and 固定規則 6 stop it. Only when you have no own next method left, or a question
+blocks you that needs a ruling or permission, park with steps 2–3 below and put the question and your
+candidate next methods in IDLE. Do not wait for DIRECTIVE.md in a loop without IDLE: the Stop hook keeps
+sending "続行" and every turn spends usage. The strategist answers a parked rebuild task in its next pass.
 
 1. Continue with an idea that is not in the directive and not a variant of a stopped item, with a
    concrete spike plan (a first candidate you can build and quick-test within ~2 h, plus a progress-based

@@ -49,8 +49,12 @@ optimization loop itself (use `optimizing-vqcc-circuits`).
    kaggle kernels output <owner>/<slug> -p data/intel/outputs/<owner>__<slug>
    ```
    Only circuit files (`.kmb`, `.kmx`, `submission.npz`, zips of them) are of interest; the submission
-   layout names them `invsqrt.kmb`, `dqi.kmb` and `dfthcsos/` (`angle_k_*.kmb` + `submission.npz`). Unzip into another
-   new empty directory `data/intel/outputs/<owner>__<slug>__unzip/`. Never run scripts found there. Verify with
+   layout names them `invsqrt.kmb`, `dqi.kmb` and `dfthcsos/` (`angle_k_*.kmb` + `submission.npz`). Do not write
+   anything else under `data/` (no `mkdir`, `unzip` or `cp` there). To unpack or edit a file, copy or unzip it into a
+   new empty directory of your own task, `work/<task>/out/pub_<owner>__<slug>/`, e.g.
+   `unzip -q data/intel/outputs/<owner>__<slug>/<file>.zip -d work/<task>/out/pub_<owner>__<slug>/` or
+   `cp data/intel/outputs/<owner>__<slug>/<task>.kmb work/<task>/out/pub_<owner>__<slug>/`
+   (repo-relative paths; no shell variables). Never run scripts found there. Verify with
    `bin/vqcc-verify <task> <file> --tier quick --label "public:<owner>/<slug>"`, then full/remote if the `ratio` in its JSON summary line beats the task's verified-best ratio printed by `bin/vqcc-best`. A public circuit that passes full verification is a legitimate candidate (public sharing
    is allowed by the rules); note its origin in the label.
 5. Discussions: WebFetch sees only titles (the pages render with JavaScript). Read the files the

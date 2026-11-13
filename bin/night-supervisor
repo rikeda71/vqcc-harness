@@ -117,6 +117,8 @@ start_worker() {  # $1 worker, $2 = "fresh" for a new session after a context ro
   local w="$1" wdir="$VQCC_STATE/workers/$1" resume_id="" out p
   mkdir -p "$wdir" "$ROOT/work/$w"
   rm -f "$wdir/STOP" "$wdir/waiting" "$wdir/continues" "$wdir/rotate" "$wdir/rotate_asked" "$wdir/rotate_wait"
+  # A worker restarted before the wrap-up window must get the wrap-up instruction again.
+  [ "$(vqcc_min_to_end)" -gt "$VQCC_WRAPUP_MIN" ] && rm -f "$wdir/wrapup_sent"
   if [ "${2:-}" = fresh ]; then
     rm -f "$wdir/session_id"; resume_id=fresh
   elif [ -s "$wdir/session_id" ] && [ "$(cat "$wdir/night_id" 2>/dev/null)" = "$NIGHT_ID" ]; then
@@ -177,7 +179,11 @@ strategy_tick() {  # $1 = now
       read -r wts wtype < "$wdir/waiting"
       if [ $(( $1 - wts )) -ge 180 ]; then
         rm -f "$wdir/waiting"
-        nudge "$STRAT" "(supervisor) 承認者はいません。拒否されたものとして扱い、許可された手段で作戦会議を完了し、STRATEGY.md と DIRECTIVE.md を書いて停止してください。"
+        if [ "$wtype" = permission_prompt ]; then
+          nudge "$STRAT" "(supervisor) 承認者はいません。拒否されたものとして扱い、許可された手段で作戦会議を完了し、STRATEGY.md と DIRECTIVE.md を書いて停止してください。"
+        else
+          nudge "$STRAT" "(supervisor) 入力待ちのまま止まっています (承認待ちの操作はありません)。作戦会議を完了し、STRATEGY.md と DIRECTIVE.md を書いて停止してください。"
+        fi
       fi
     fi
   elif [ $(( $1 - STRAT_LAST )) -ge $(( VQCC_STRATEGY_INTERVAL_MIN * 60 )) ] && [ "$(vqcc_min_to_end)" -gt 60 ]; then
@@ -334,11 +340,20 @@ while :; do
       break
     fi
     # Waiting on a permission prompt / idle input for a while -> nudge.
+    # Only a permission_prompt means an operation is pending approval. An idle_prompt while the
+    # rotation waits for a background subagent (rotate_wait) is expected: its completion wakes the
+    # session, so leave it alone. Any other idle_prompt gets a plain "continue" (no approval wording).
     if [ -f "$wdir/waiting" ]; then
       read -r wts wtype < "$wdir/waiting"
-      if [ $(( now - wts )) -ge 180 ]; then
+      if [ "$wtype" = idle_prompt ] && [ -f "$wdir/rotate_wait" ]; then
         rm -f "$wdir/waiting"
-        nudge "$w" "(supervisor) この操作の承認者はいません。拒否されたものとして扱い、許可されている手段 (bin/vqcc-* や work/ 内のスクリプト) で代替してください。作業を続行してください。"
+      elif [ $(( now - wts )) -ge 180 ]; then
+        rm -f "$wdir/waiting"
+        if [ "$wtype" = permission_prompt ]; then
+          nudge "$w" "(supervisor) 直前の操作は承認待ちですが、承認者はいません。拒否されたものとして扱い、許可されている手段 (bin/vqcc-* や work/ 内のスクリプト) で代替して作業を続行してください。"
+        else
+          nudge "$w" "(supervisor) 入力待ちのまま止まっています (承認待ちの操作はありません)。work/${w}/NOTES.md の「次にやること」から作業を続行してください。待機すべき状態 (Park / 切り替え待ち) なら、その旨を NOTES.md に書いて停止してください。"
+        fi
       fi
     fi
     # Woken for finished results: its wait command should have fired; if nothing happened for 3 min, nudge once.

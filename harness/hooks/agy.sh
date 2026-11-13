@@ -64,7 +64,11 @@ case "$ev" in
     # agy quota / account trouble: hand the role back to Claude Code (vqcc_engine skips agy during the
     # cooldown) through a fresh session that resumes from NOTES.md.
     if [ -n "$err" ] && printf '%s' "$err" | grep -Eqi 'quota|rate.?limit|resource.?exhausted|429|credits|unauthenticated|sign.?in|log.?in'; then
-      printf '%s %s\n' "$(date +%s)" "$(printf '%s' "$err" | head -c 300)" > "$VQCC_STATE/AGY_FAILED"
+      # "Resets in 4h24m11s": keep agy off until then (otherwise the default cooldown applies).
+      now=$(date +%s); rs=$(printf '%s' "$err" | grep -Eo 'Resets in ([0-9]+h)?([0-9]+m)?([0-9]+s)?' | head -n 1)
+      h=$(printf '%s' "$rs" | grep -Eo '[0-9]+h' | tr -d h); m=$(printf '%s' "$rs" | grep -Eo '[0-9]+m' | tr -d m)
+      until=""; [ -n "$h$m" ] && until="until=$(( now + ${h:-0} * 3600 + ${m:-0} * 60 + 60 )) "
+      printf '%s %s%s\n' "$now" "$until" "$(printf '%s' "$err" | head -c 300)" > "$VQCC_STATE/AGY_FAILED"
       vqcc_log "agy-hook[$worker]: agy error ($reason): $(printf '%s' "$err" | head -c 200); back to Claude Code"
       [ "$worker" != strategist ] && echo "agy error: back to Claude Code" > "$wdir/rotate"
       echo '{}'; exit 0

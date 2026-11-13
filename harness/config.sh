@@ -145,8 +145,14 @@ vqcc_agy_ok() {
   [ -f "$VQCC_STATE/AGY_OFF" ] && return 1
   local f="$VQCC_STATE/AGY_FAILED" m
   if [ -f "$f" ]; then
-    m=$(/usr/bin/stat -f %m "$f" 2>/dev/null || echo 0)
-    [ $(( $(date +%s) - m )) -lt $(( VQCC_AGY_FAIL_COOLDOWN_MIN * 60 )) ] && return 1
+    # "<ts> until=<epoch> ...": agy reported when its quota resets; otherwise the default cooldown.
+    m=$(grep -Eo 'until=[0-9]+' "$f" 2>/dev/null | head -n 1 | cut -d= -f2)
+    if [ -n "$m" ]; then
+      [ "$(date +%s)" -lt "$m" ] && return 1
+    else
+      m=$(/usr/bin/stat -f %m "$f" 2>/dev/null || echo 0)
+      [ $(( $(date +%s) - m )) -lt $(( VQCC_AGY_FAIL_COOLDOWN_MIN * 60 )) ] && return 1
+    fi
   fi
   return 0
 }

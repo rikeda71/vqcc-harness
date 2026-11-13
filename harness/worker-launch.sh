@@ -76,7 +76,9 @@ vqcc_log "launch[$w]: agy exited rc=$rc after ${dt}s"
 # agy died right away (not signed in, quota, crash): do not use it for a while and run this session on
 # Claude Code instead. (A supervisor close sends ctrl+c, which also ends this script.)
 if [ "$dt" -lt "$VQCC_AGY_MIN_ALIVE_S" ] && [ "$rc" -ne 130 ]; then
-  echo "$(date +%s) agy exited rc=$rc after ${dt}s" > "$VQCC_STATE/AGY_FAILED"
+  # (keep a failure the agy Stop hook just recorded: it may carry the quota reset time)
+  fm=$(/usr/bin/stat -f %m "$VQCC_STATE/AGY_FAILED" 2>/dev/null || echo 0)
+  [ $(( $(date +%s) - fm )) -gt "$dt" ] && echo "$(date +%s) agy exited rc=$rc after ${dt}s" > "$VQCC_STATE/AGY_FAILED"
   vqcc_log "launch[$w]: agy failed fast; falling back to Claude Code (agy off for $VQCC_AGY_FAIL_COOLDOWN_MIN min)"
   echo claude > "$wdir/engine"; export VQCC_ENGINE=claude
   if [ "$w" = strategist ]; then

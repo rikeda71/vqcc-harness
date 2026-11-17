@@ -23,7 +23,7 @@ if [ -n "$resume_id" ] && [ "$resume_id" != fresh ] && [ "$(cat "$wdir/session_e
 fi
 echo "$engine" > "$wdir/engine"
 export VQCC_ENGINE="$engine"
-vqcc_log "launch[$w]: engine=$engine ${resume_id:+($resume_id)} usage=$(vqcc_usage)"
+vqcc_log "launch[$w]: engine=$engine ${resume_id:+($resume_id)} usage=$(vqcc_usage)${VQCC_WORKER_MODEL:+ worker_model=$VQCC_WORKER_MODEL}${VQCC_WORKER_EFFORT:+ worker_effort=$VQCC_WORKER_EFFORT}"
 
 if [ "$w" = strategist ]; then
   prompt="あなたは VQCC 作戦参謀 (strategist) です。AGENTS.md (特に「作戦参謀」節) を読み、skill planning-vqcc-strategy の手順に従って作戦会議を 1 回行ってください: 順位とメダル/目標までの距離の把握、上位手法の推定、公開情報に頼らない自前の抜本策の設計と机上試算、目標からの逆算、タスクごとの方針 (チューニング継続か抜本的な構造変更か) の決定、work/STRATEGY.md と各タスクの work/<task>/DIRECTIVE.md の更新。回路の作成・検証はしません。人間は見ていないので確認や質問はせず自分で判断すること。書き終えたら work/ をコミットし、短く報告して停止してください。"
@@ -45,7 +45,7 @@ if [ "$engine" = claude ]; then
   if [ "$w" = strategist ]; then
     exec "$VQCC_CLAUDE_BIN" --permission-mode "$VQCC_PERMISSION_MODE" ${VQCC_STRATEGIST_MODEL:+--model "$VQCC_STRATEGIST_MODEL"} -n "vqcc-strategist" "$prompt"
   fi
-  exec "$VQCC_CLAUDE_BIN" --permission-mode "$VQCC_PERMISSION_MODE" -n "vqcc-${w}" ${resume_id:+--resume "$resume_id"} "$prompt"
+  exec "$VQCC_CLAUDE_BIN" --permission-mode "$VQCC_PERMISSION_MODE" -n "vqcc-${w}" ${VQCC_WORKER_MODEL:+--model "$VQCC_WORKER_MODEL"} ${VQCC_WORKER_EFFORT:+--effort "$VQCC_WORKER_EFFORT"} ${resume_id:+--resume "$resume_id"} "$prompt"
 fi
 
 # --- agy ---------------------------------------------------------------------
@@ -86,6 +86,6 @@ if [ "$dt" -lt "$VQCC_AGY_MIN_ALIVE_S" ] && [ "$rc" -ne 130 ]; then
 
 }"
   fi
-  exec "$VQCC_CLAUDE_BIN" --permission-mode "$VQCC_PERMISSION_MODE" -n "vqcc-${w}" "あなたは VQCC 夜間ワーカー「${w}」です。agy が起動直後に終了したため Claude Code で起動し直しました。AGENTS.md を読み、skill optimizing-vqcc-circuits の手順に従って task=${w} の回路最適化を続けてください。引き継ぎは work/${w}/NOTES.md の「現在地」「進行中」「次にやること」にあります。bin/vqcc-best と bin/vqcc-remote status で走行中・完了済みの検証も確認してから再開すること。"
+  exec "$VQCC_CLAUDE_BIN" --permission-mode "$VQCC_PERMISSION_MODE" -n "vqcc-${w}" ${VQCC_WORKER_MODEL:+--model "$VQCC_WORKER_MODEL"} ${VQCC_WORKER_EFFORT:+--effort "$VQCC_WORKER_EFFORT"} "あなたは VQCC 夜間ワーカー「${w}」です。agy が起動直後に終了したため Claude Code で起動し直しました。AGENTS.md を読み、skill optimizing-vqcc-circuits の手順に従って task=${w} の回路最適化を続けてください。引き継ぎは work/${w}/NOTES.md の「現在地」「進行中」「次にやること」にあります。bin/vqcc-best と bin/vqcc-remote status で走行中・完了済みの検証も確認してから再開すること。"
 fi
 exit "$rc"

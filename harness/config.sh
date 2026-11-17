@@ -50,6 +50,10 @@ VQCC_PERMISSION_MODE="${VQCC_PERMISSION_MODE:-auto}"
 # inherit the parent model.
 VQCC_STRATEGIST_MODEL="${VQCC_STRATEGIST_MODEL:-fable}"
 VQCC_SUBAGENT_MODEL="${VQCC_SUBAGENT_MODEL:-sonnet}"
+# Task workers (invsqrt/dqi/dfthcsos) on Claude Code: model and effort (empty = the CLI default).
+# Read at every session launch (fresh, rotation, resume), so a change applies from the next launch.
+VQCC_WORKER_MODEL="${VQCC_WORKER_MODEL:-}"
+VQCC_WORKER_EFFORT="${VQCC_WORKER_EFFORT:-}"
 
 # agy (Antigravity CLI, Claude Opus via Google) as a second engine that saves the Claude subscription.
 # A session is launched on agy instead of Claude Code (harness/worker-launch.sh, see harness/AGY.md) when

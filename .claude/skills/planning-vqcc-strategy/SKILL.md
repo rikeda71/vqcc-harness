@@ -180,6 +180,13 @@ file per task, `work/strategy/breakthrough/<task>.md` (create it if missing; nev
    that do not come from public material (public notebooks / discussions / other teams' circuits;
    adapting a textbook or paper technique to our circuit counts as our own). For each: mechanism, napkin estimate of the new cost and the
    ratio gain, the main risk, a first spike a worker can build in ~2 h, and its stop rule.
+3b. **Literature.** Search papers for the dominant stage's function (WebSearch, arXiv pages via WebFetch;
+   e.g. "Toffoli count quantum inverse square root", "bilinear multiplication complexity GF(2^n)") when
+   the breakthrough file has no `### 文献` entry for that stage from the last 3 nights, or the dominant
+   stage changed. Queries name the math problem only, never our circuits or competition data. Append
+   `### 文献 (YYYY-MM-DD, <stage>)` with one line per paper: arXiv id or citation, its claimed cost, how it
+   maps to our stage and verifier interface, and the result (new idea → item 3 list / not applicable:
+   reason). A paper's number is a hypothesis until a desk trial reproduces it under our cost model.
 4. **Desk trial.** For the 1–2 most promising ideas, settle the biggest uncertainty with a desk-trial
    script or a short calculation (e.g. count the stage it replaces; evaluate the approximation error).
 5. **Status.** Each idea carries a status: untested / desk-checked (numbers) / spike assigned
@@ -189,7 +196,10 @@ file per task, `work/strategy/breakthrough/<task>.md` (create it if missing; nev
 Ideas that need a technique the hard limits forbid are not ideas; drop them. Mark an idea no-go only on
 evidence: a proof, a hard-limit or BRIEF violation, a verifier fact, or a built and measured spike. A
 napkin estimate that it "probably" fails, or a low success probability, lowers its rank; it does not close
-it. Rank the open ideas by expected gain (gain if it works × probability); they are the input to Step 4
+it. Estimate every gain against the current best: a gain measured or estimated on an older best usually
+shrinks once the base is stronger, so when the current best changed after an idea's estimate, redo the
+estimate on the current circuit (recount the stage it touches) before ranking it.
+Rank the open ideas by expected gain (gain if it works × probability); they are the input to Step 4
 together with their thresholds there. If the floors show the target cannot be reached on some task even when every idea
 works, write that with the numbers in 今回の判断 and aim at the best reachable ratio; do not ask humans
 for ideas.
@@ -204,7 +214,9 @@ for ideas.
    to realistic headroom, not equally. For each task, estimate the headroom:
    - gap to the audited public best (`public_best.json`);
    - structural ideas still open in NOTES / BRIEF / PLAN files and in `work/strategy/breakthrough/<task>.md`,
-     with each one's expected gain;
+     with each one's expected gain (multiply gains only of ideas on different stages; ideas that cut
+     the same stage, whether its Toffoli or its qubits, overlap, so count the best one unless a desk
+     trial shows they combine);
    - the theoretical or primer floor;
    - recent velocity (`progress` in standing: ratio now, 24h ago and 72h ago; improvements per night
      from reports/DAILY.md). A past value of ~1.0 or null means the task was still on the sample then

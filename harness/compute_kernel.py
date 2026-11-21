@@ -3,7 +3,7 @@
 harness/compute.py replaces __JOB_B64__ (base64 JSON) with the job parameters and pushes the result as a
 private Kaggle script kernel (internet disabled). mode "gpu_check": report nvidia-smi / torch.cuda and run a
 small matmul. mode "run": verify the GPU (unless gpu_required is false), unpack the worker's src (private
-dataset, src.tar.gz) to /kaggle/working/src, run `python <entry> <args>` there with VQCC_OUT=/kaggle/working/out,
+dataset, src.vqccpack = tar.gz) to /kaggle/working/src, run `python <entry> <args>` there with VQCC_OUT=/kaggle/working/out,
 and write /kaggle/working/result.json. The kernel exits 0 once result.json is written; failures are inside it.
 """
 import base64
@@ -98,8 +98,8 @@ if not hits:
     result["error"] = "src dataset not found under /kaggle/input"
     finish()
 ds_dir = hits[0]
-tgz = os.path.join(ds_dir, JOB["payload"])
-if os.path.exists(tgz):
+tgz = next((p for p in (os.path.join(ds_dir, n) for n in (JOB["payload"], "src.tar.gz")) if os.path.exists(p)), "")
+if tgz:
     os.makedirs(SRC, exist_ok=True)
     with tarfile.open(tgz, "r:gz") as tf:
         tf.extractall(SRC)

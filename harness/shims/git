@@ -1,0 +1,48 @@
+#!/bin/bash
+# Night-worker shim: three workers commit to the shared work/ repo, so `git -C work add/commit` often hit
+# "index.lock: File exists" from a neighbour's commit. For index-writing subcommands, wait (up to ~30 s)
+# for a foreign index.lock to go away and retry on that error. Everything else passes straight through.
+self_dir="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd -P)"
+real=""
+IFS=: read -ra dirs <<< "$PATH"
+for d in "${dirs[@]}"; do
+  [ -z "$d" ] && continue
+  [ "$(cd "$d" >/dev/null 2>&1 && pwd -P)" = "$self_dir" ] && continue
+  if [ -x "$d/git" ]; then real="$d/git"; break; fi
+done
+[ -z "$real" ] && real=/usr/bin/git
+
+# find the subcommand after global options (-C dir, -c k=v, --git-dir=..., ...)
+i=1; sub=""; pre=()
+while [ $i -le $# ]; do
+  a="${!i}"
+  case "$a" in
+    -C|-c|--git-dir|--work-tree|--namespace) pre+=("$a"); i=$((i+1)); pre+=("${!i}") ;;
+    -*) pre+=("$a") ;;
+    *) sub="$a"; break ;;
+  esac
+  i=$((i+1))
+done
+case "$sub" in
+  add|commit|rm|mv|reset|checkout|switch|restore|stash|merge|cherry-pick|revert|update-index) ;;
+  *) exec "$real" "$@" ;;
+esac
+
+gitdir="$("$real" "${pre[@]}" rev-parse --git-dir 2>/dev/null)"
+if [ -n "$gitdir" ]; then
+  case "$gitdir" in /*) ;; *) gitdir="$("$real" "${pre[@]}" rev-parse --absolute-git-dir 2>/dev/null)" ;; esac
+fi
+wait_lock() {
+  [ -z "$gitdir" ] && return
+  local k=0
+  while [ -e "$gitdir/index.lock" ] && [ $k -lt 60 ]; do sleep 0.5; k=$((k+1)); done
+}
+errf="$(mktemp "${TMPDIR:-/tmp}/vqcc-git.XXXXXX")"
+trap 'rm -f "$errf"' EXIT
+for attempt in 1 2 3 4 5; do
+  wait_lock
+  "$real" "$@" 2>"$errf"; rc=$?
+  if [ $rc -ne 0 ] && grep -q 'index.lock' "$errf" && [ $attempt -lt 5 ]; then sleep 2; continue; fi
+  cat "$errf" >&2
+  exit $rc
+done

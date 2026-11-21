@@ -1,0 +1,17 @@
+#!/bin/bash
+# Night-worker shim: GNU tail rejects the obsolete count form with several files
+# (`tail -3 a.log b.log` -> "option used in invalid context -- 3"). Rewrite a leading -N / -Nf to -n N.
+self_dir="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd -P)"
+real=""
+IFS=: read -ra dirs <<< "$PATH"
+for d in "${dirs[@]}"; do
+  [ -z "$d" ] && continue
+  [ "$(cd "$d" >/dev/null 2>&1 && pwd -P)" = "$self_dir" ] && continue
+  if [ -x "$d/tail" ]; then real="$d/tail"; break; fi
+done
+[ -z "$real" ] && real=/usr/bin/tail
+if [[ "${1:-}" =~ ^-([0-9]+)([fF]?)$ ]]; then
+  n="${BASH_REMATCH[1]}"; f="${BASH_REMATCH[2]}"; shift
+  if [ -n "$f" ]; then set -- "-$f" -n "$n" "$@"; else set -- -n "$n" "$@"; fi
+fi
+exec "$real" "$@"

@@ -1,0 +1,3 @@
+#!/bin/bash
+# Night-worker shim: GNU coreutils are installed unprefixed here (`timeout`), not as gtimeout.
+exec timeout "$@"

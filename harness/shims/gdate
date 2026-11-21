@@ -1,0 +1,3 @@
+#!/bin/bash
+# Night-worker shim: some shells alias date to gdate, which is not installed here. GNU date is `date` itself.
+exec date "$@"

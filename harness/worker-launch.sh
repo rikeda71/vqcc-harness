@@ -39,6 +39,10 @@ elif [ -n "$resume_id" ]; then
 else
   prompt="あなたは VQCC 夜間ワーカー「${w}」です。AGENTS.md を読み、skill optimizing-vqcc-circuits の手順に従って task=${w} の回路最適化を自律的に進めてください。まず work/${w}/NOTES.md (無ければ work/${w}/BRIEF.md と work/BRIEF_OVERVIEW.md) と bin/vqcc-best で現在地を把握してから始めること。"
 fi
+# The NOTES.md / STRATEGY.md of a long competition are hundreds of KB: a plain Read of them was the most common
+# failed tool call of a fresh session (over the 256KB / 25k-token limit, even with a line limit).
+prompt="$prompt
+(注意) work/<task>/NOTES.md と work/STRATEGY.md は大きく Read tool では開けない。Bash で \`grep -n '^## ' <file> | head -20\` で節の行番号を見て、\`sed -n 'A,Bp' <file>\` で必要な節 (新しい節は先頭側) だけ読む。"
 [ "$resume_id" = fresh ] && resume_id=""
 
 if [ "$engine" = claude ]; then

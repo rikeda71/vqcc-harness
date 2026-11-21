@@ -101,15 +101,19 @@
   - **待つとき**: foreground の `sleep N; cat log` はブロックされる。ジョブ自体を Bash の `run_in_background: true` で起動して完了通知を待つか、
     条件待ちなら `until grep -q DONE <log>; do sleep 15; done` を `run_in_background: true` で実行する。待つ間は次の準備をする。
     Monitor tool は ToolSearch (`select:Monitor`) でスキーマを読み込んでから呼ぶ (`description` 必須)。
-  - シェルは zsh。マッチしない glob (`ls dir/*x*`) は `no matches found` でコマンド全体が失敗し、`grep` は 0 件で exit 1 になる。
-    0 件があり得る探索は `2>/dev/null; true` で終える。
+  - **`work/<task>/NOTES.md` や `work/STRATEGY.md` は数百 KB あり、Read tool では開けない** (256KB 超・25k token 超で失敗。`limit` を付けても長い行で超える)。
+    新しい節は先頭にあるので、`grep -n '^## ' work/<task>/NOTES.md | head -20` で節の行番号を見てから `sed -n '1,60p' work/<task>/NOTES.md` のように必要な節だけ Bash で読む。
+  - シェルは zsh (harness/worker-env.sh で `NO_EQUALS NO_NOMATCH`)。区切り行は `echo "== x"` のように引用する。マッチしない glob は文字列のまま渡り
+    (`ls: cannot access`)、`grep` は 0 件で exit 1 になる。0 件があり得る探索は `2>/dev/null; true` で終える。
+  - `tail -3 a.log b.log` (複数ファイルの旧書式) は harness/shims/tail が `-n 3` に直す。`gdate`/`gtimeout` は無い (`date`/`timeout` が GNU 版)。
   - `sed` は GNU と BSD の書き方 (`sed -i 's/…/…/' f` / `sed -i '' 's/…/…/' f`) のどちらでも動く (harness/shims/sed)。`ps -f` は使えない (`ps -o pid,command -p <pid>` / `pgrep -fl`)。
     複数行・記号の多い置換はシェルでなく Edit tool か Python で行う。
   - numpy のスカラーには `int.bit_length()` などが無い: `int(x)` に変換してから使う。
-  - `work/.git/index.lock` の `File exists` は他ワーカーのコミットと衝突しただけ。数秒後にもう一度コミットする (lock ファイルは消さない)。
+  - `work/.git/index.lock` の `File exists` は他ワーカーのコミットと衝突しただけ。harness/shims/git が最大 30 秒待って再試行する。それでも出たら数秒後にもう一度コミットする (lock ファイルは消さない)。
+  - `bin/vqcc-compute` の `--src` に置いたデータは Kaggle 側で展開されないよう tar のまま送る (2026-11-19 修正。それ以前は `.gz` のデータファイルが消えた)。
 - 探索・評価の内側ループが Python で遅いときは Rust で書いてよい (`cargo` は導入済み。crate は `work/<task>/` の中に作り、ビルド成果物もそこに置く)。
   自前の高速評価器は正当性の判定を省かない (機能の全入力チェックか、任意の初期状態を含む乱択チェック)。採否は従来どおり公式 verifier で決める。
-- Python は `.venv/bin/python` (kickmix, numpy, scipy 入り)。追加パッケージが必要なら `work/<task>/` 内に専用 venv を作る (`uv venv work/<task>/.venv`)。
+- Python は `.venv/bin/python` (kickmix, numpy, scipy 入り。素の `python3` には numpy が無い)。追加パッケージが必要なら `work/<task>/` 内に専用 venv を作る (`uv venv work/<task>/.venv`)。
   ダウンロード物 (`data/`) を読む Python は `-I` を付けて実行し、`data/` を cwd にしない。
 
 ## ユーザーのグローバル指示との関係

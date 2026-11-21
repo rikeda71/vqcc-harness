@@ -38,7 +38,9 @@ LOCK = STATE / ".lock"
 WORK_ROOT = ROOT / "work"
 CONF = ROOT / "harness" / "compute.toml"
 TEMPLATE = ROOT / "harness" / "compute_kernel.py"
-PAYLOAD = "src.tar.gz"
+# Not *.tar.gz / *.zip: Kaggle auto-extracts archive uploads and, while doing so, also unpacks or drops nested
+# .gz files inside them (job dqi-1119055141 lost data/r26ops.u16.gz). An unknown extension keeps the tarball intact.
+PAYLOAD = "src.vqccpack"
 ACTIVE = ("pushed", "running")
 EXCLUDE_DIRS = {".venv", "__pycache__", ".git"}
 WEEK_S = 7 * 24 * 3600

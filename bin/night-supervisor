@@ -166,7 +166,14 @@ start_strategist() {  # $1 = optional trigger note handed to the strategist prom
 }
 strategy_tick() {  # $1 = now
   [ "$VQCC_STRATEGY_INTERVAL_MIN" -gt 0 ] 2>/dev/null || return 0
-  local wdir="$VQCC_STATE/workers/$STRAT" st wts wtype
+  local wdir="$VQCC_STATE/workers/$STRAT" st wts wtype note
+  # A human session asked for a pass now (touch state/STRATEGIST_NOW; its text goes to the prompt).
+  if [ -f "$VQCC_STATE/STRATEGIST_NOW" ] && [ -z "$(wpane "$STRAT")" ]; then
+    note=$(head -c 2000 "$VQCC_STATE/STRATEGIST_NOW"); rm -f "$VQCC_STATE/STRATEGIST_NOW"
+    vqcc_log "supervisor: strategist pass requested by a human (state/STRATEGIST_NOW)"
+    STRAT_LAST=$1; start_strategist "human: 人間が臨時の作戦会議を依頼しました。${note}"
+    return 0
+  fi
   if [ -n "$(wpane "$STRAT")" ]; then
     st=$(cat "$wdir/started" 2>/dev/null || echo "$1")
     if [ -f "$wdir/done" ]; then
@@ -241,6 +248,14 @@ nudge() {  # $1 worker, $2 text
 }
 
 STRAT_LAST=0; STRAT_ALLPARKED=0; PAUSED=0; LAST_POLL=0; KFAIL=0; END_REASON=""; SUBMITTED_TONIGHT=0; LAST_SUBMIT_TRY=0; START_TS=$(date +%s)
+# Daily disk cleanup of leftover intermediates (human decision 2026-11-21; harness/cleanup.py).
+cleanup_disk() {  # $1 = reason
+  LAST_CLEANUP=$(date +%s)
+  ( "$ROOT/bin/vqcc-cleanup" >> "$VQCC_STATE/logs/cleanup.log" 2>&1
+    vqcc_log "supervisor: disk cleanup ($1): $(tail -n 1 "$VQCC_STATE/logs/cleanup.log")" ) &
+}
+free_gb() { /bin/df -g "$ROOT" | awk 'NR==2 {print $4}'; }
+cleanup_disk "night start"
 for w in $VQCC_WORKERS; do
   mkdir -p "$VQCC_STATE/workers/$w"; echo 0 > "$VQCC_STATE/workers/$w/restarts"
   rm -f "$VQCC_STATE/workers/$w/woken" "$VQCC_STATE/workers/$w/IDLE.woken" "$VQCC_STATE/workers/$w/woken_nudged"
@@ -408,6 +423,11 @@ while :; do
     fi
     [ -x "$ROOT/bin/vqcc-remote" ] && "$ROOT/bin/vqcc-remote" poll >> "$VQCC_STATE/logs/remote-poll.log" 2>&1 &
     [ -x "$ROOT/bin/vqcc-compute" ] && "$ROOT/bin/vqcc-compute" poll >> "$VQCC_STATE/logs/compute-poll.log" 2>&1 &
+  fi
+
+  # Hourly: free disk below VQCC_CLEANUP_FREE_MIN_GB -> clean up again.
+  if [ $(( now - LAST_CLEANUP )) -ge 3600 ] && [ "$(free_gb)" -lt "$VQCC_CLEANUP_FREE_MIN_GB" ] 2>/dev/null; then
+    cleanup_disk "free $(free_gb)G < ${VQCC_CLEANUP_FREE_MIN_GB}G"
   fi
 
   # Submit when the verified best improved (deterministic policy in harness/submit.py): every

@@ -93,6 +93,9 @@ VQCC_STRATEGY_IDLE_GAP_MIN="${VQCC_STRATEGY_IDLE_GAP_MIN:-30}"
 # When every worker stays parked after a pass (none woken), the strategist is re-run after the same gap,
 # at most this many times a night (0 = off), so the night does not stall until the next interval.
 VQCC_STRATEGY_ALL_PARKED_MAX="${VQCC_STRATEGY_ALL_PARKED_MAX:-4}"
+# Disk cleanup (bin/vqcc-cleanup, harness/cleanup.py): the supervisor runs it at every night start and,
+# checked hourly, whenever free disk is below this many GB. Thresholds: VQCC_CLEANUP_* in cleanup.py.
+VQCC_CLEANUP_FREE_MIN_GB="${VQCC_CLEANUP_FREE_MIN_GB:-50}"
 
 # 0 (true) when worker $1 is parked: work/$1/IDLE exists and is not older than work/$1/DIRECTIVE.md.
 vqcc_parked() {

@@ -1,0 +1,5 @@
+#!/bin/bash
+# Thin wrapper: runs harness/cleanup.py (daily disk cleanup of leftover intermediates) via harness/pyrun.
+#   bin/vqcc-cleanup [--dry-run]
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec "$ROOT/harness/pyrun" "$ROOT/harness/cleanup.py" "$@"

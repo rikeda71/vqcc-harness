@@ -111,6 +111,10 @@
   - numpy のスカラーには `int.bit_length()` などが無い: `int(x)` に変換してから使う。
   - `work/.git/index.lock` の `File exists` は他ワーカーのコミットと衝突しただけ。harness/shims/git が最大 30 秒待って再試行する。それでも出たら数秒後にもう一度コミットする (lock ファイルは消さない)。
   - `bin/vqcc-compute` の `--src` に置いたデータは Kaggle 側で展開されないよう tar のまま送る (2026-11-19 修正。それ以前は `.gz` のデータファイルが消えた)。
+  - ディスクの自動掃除 (`bin/vqcc-cleanup`。supervisor が毎晩の開始時と、空きが 50G を切ったときに実行する):
+    - `work/<task>/out/` の 100MB 以上のファイルを消す。HEAD にコミット済みで未変更なら 24 時間後 (`git -C work checkout HEAD -- <path>` で戻せる)、未追跡・ignore なら 48 時間後 (戻せない。src から再生成する)。
+    - 使い続ける大きなファイルは、DIRECTIVE.md か NOTES.md の先頭 150 行に `out/...` のパスを書いておけば消えない。
+    - ほかに、3 日より古い `data/intel/outputs/` と、full/remote PASS の無い 3 日より古い `artifacts/` も消す。
 - 探索・評価の内側ループが Python で遅いときは Rust で書いてよい (`cargo` は導入済み。crate は `work/<task>/` の中に作り、ビルド成果物もそこに置く)。
   自前の高速評価器は正当性の判定を省かない (機能の全入力チェックか、任意の初期状態を含む乱択チェック)。採否は従来どおり公式 verifier で決める。
 - Python は `.venv/bin/python` (kickmix, numpy, scipy 入り。素の `python3` には numpy が無い)。追加パッケージが必要なら `work/<task>/` 内に専用 venv を作る (`uv venv work/<task>/.venv`)。

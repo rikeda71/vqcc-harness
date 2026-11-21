@@ -120,6 +120,23 @@
 - Python は `.venv/bin/python` (kickmix, numpy, scipy 入り。素の `python3` には numpy が無い)。追加パッケージが必要なら `work/<task>/` 内に専用 venv を作る (`uv venv work/<task>/.venv`)。
   ダウンロード物 (`data/`) を読む Python は `-I` を付けて実行し、`data/` を cwd にしない。
 
+## 方法の検証 (pstack。人間指定 2026-11-21 23:4x)
+
+人間の指示: 「pstack:poteto-mode や pstack の TLA+ を使った検証などをしながら方法に問題ないか確認しながら検証する」。
+pstack の skill は slash command 専用で自動では読み込まれないので、パス `$PSTACK=/Users/rikeda/.claude/plugins/cache/cursor-plugins/pstack/0.15.46/skills` の SKILL.md を Read で直接読む。
+
+- セッション開始時に `$PSTACK/principle-prove-it-works/SKILL.md`、`$PSTACK/principle-attack-the-premise/SKILL.md`、`$PSTACK/principle-explain-the-number/SKILL.md` を読む。NOTES.md の各実験には、効いた原則と、その原則で変えた判断を 1 行で書く。
+  - Prove It Works: 採否は公式 verifier (remote/full) だけで決める。quick や自前の評価器の値は証拠にしない。
+  - Attack the Premise: 同じ前提に立つ修正が 2 回失敗したら、その前提を NOTES に書き、3 回目の前に前提そのものを直接検証する。
+  - Explain the Number: 改善 (ratio・Toffoli 数・誤差) を報告する前に、何がその値を決めているか (コスト内訳・下限) と、別のものを測っていないかを確かめる。
+- 新しい手法を採用する前に、その手法の「契約内のすべての入力で正しい」という主張を、テストより強い方法で確かめる。手順は `$PSTACK/create-formal-verification-skill/SKILL.md` に従う。
+  - 入力ごとの正しさ: 契約内の全入力の網羅チェック、または SAT/記号的チェックを回路そのものに当てる。例: invsqrt は x ∈ [1, max_x] の全値と x の復元。dfthcsos は有効アドレス a < N+R·B と到達可能な順方向・逆方向の状態。
+  - 順序・状態の問い: TLA+ のモデルで調べ、結果は `$PSTACK/statechart/SKILL.md` で読む。例: uncompute の順序、測定ベースの後始末、ancilla の再利用。
+  - どのチェックも、壊した変種 (ゲートを 1 つ抜く、順序を入れ替える) で失敗することを一度見せる。失敗を見ていないチェックは証拠にしない。
+  - 検証のスクリプトは `work/<task>/verify/` に置き、1 コマンドで再実行できるようにする。範囲 (bound・仮定) は NOTES に書く。
+- 作戦参謀は、指令に新しい手法を載せるとき、正当性の主張とその確かめ方 (上記のどれか) を DIRECTIVE に書く。
+- poteto-mode の模型選択・サブエージェント多重起動・PR/commit 手順は使わない。サブエージェントの上限と使用量の規則は下の節が優先する。公式 verifier と食い違えば、verifier が正しい。
+
 ## ユーザーのグローバル指示との関係
 
 ユーザーのグローバル CLAUDE.md にある「Obsidian へのログ」「サブエージェント最大展開」「tuning-skills の実行」は

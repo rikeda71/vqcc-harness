@@ -36,9 +36,41 @@ vqcc_in_window || allow "outside night window"
 engine="${VQCC_ENGINE:-claude}"  # this session's engine (harness/worker-launch.sh); agy sessions do not use the Claude quota
 # Over the Claude limit with agy available: no stop here, the engine switch below hands off to agy.
 [ "$engine" = claude ] && vqcc_over_limit && ! vqcc_agy_ok && allow "usage guard: $(vqcc_usage)"
+# Plateau audit: the task's verified best has not improved for VQCC_AUDIT_PLATEAU_MIN minutes -> have the
+# worker run a fresh auditor subagent over its decision record (work/<w>/DECISIONS.md) before it goes on or
+# parks. Prints the plateau in minutes and records the audit time when one is due.
+audit_due() {
+  [ "${VQCC_AUDIT_PLATEAU_MIN:-0}" -gt 0 ] 2>/dev/null || return 1
+  local now last nstart plat
+  now=$(date +%s)
+  last=$(cat "$wdir/audit_last" 2>/dev/null || echo 0)
+  [ $(( now - last )) -ge $(( VQCC_AUDIT_COOLDOWN_MIN * 60 )) ] || return 1
+  nstart=$(/usr/bin/stat -f %m "$VQCC_STATE/night_id" 2>/dev/null || echo "$now")
+  [ $(( now - nstart )) -ge $(( VQCC_AUDIT_NIGHT_GRACE_MIN * 60 )) ] || return 1
+  [ "$(vqcc_min_to_end)" -gt $(( VQCC_WRAPUP_MIN + 30 )) ] || return 1
+  plat=$("$ROOT/harness/pyrun" "$ROOT/harness/workers.py" plateau "$worker" 2>/dev/null) || return 1
+  [ "${plat:-0}" -ge "$VQCC_AUDIT_PLATEAU_MIN" ] 2>/dev/null || return 1
+  echo "$now" > "$wdir/audit_last"
+  vqcc_log "stop-hook[$worker]: verified best flat for ${plat} min, asking for a plateau audit"
+  echo "$plat"
+}
+audit_msg() {  # $1 = plateau minutes, $2 = what to do afterwards
+  echo "(監査) ${worker} の verified best が約 $(( $1 / 60 )) 時間更新されていません。次の実験に進む前に、skill optimizing-vqcc-circuits の「Plateau audit」を行ってください: (1) work/${worker}/DECISIONS.md を最新化する (無ければ同 skill のテンプレートで作る)。(2) 白紙の subagent (Agent tool, model 指定なし) に .claude/skills/optimizing-vqcc-circuits/audit.md の監査役ブリーフを渡す。(3) 返ってきた観点ごとの判定 (退けた/採った/未着手) を DECISIONS.md「監査役の観点」に書き、コミットする。$2"
+}
+
 # Directive exhausted: the worker parked itself (work/<w>/IDLE) and waits, without using tokens, for
 # the strategist to rewrite DIRECTIVE.md (its background wait command then wakes the session).
-vqcc_parked "$worker" && allow "parked: directive exhausted, waiting for a new DIRECTIVE.md"
+# Before the first park of a plateau, send it back once for the audit (an untested angle may remain).
+if vqcc_parked "$worker"; then
+  if ! [ "${VQCC_ENGINE:-claude}" = claude ] || ! vqcc_over_limit; then
+    if plat=$(audit_due); then
+      jq -n --arg r "$(audit_msg "$plat" "(4) 未着手の観点に、DIRECTIVE のやめること・BLOCKLIST に当たらず期待値のある実験があれば、IDLE を消して「指令との差分」に書いて実行する (走っている待機コマンドは IDLE が消えると終わるが、指令の更新ではないので無視する)。無ければ監査の要点 (未着手の観点と問い) を IDLE の末尾に追記して (作戦参謀が読む) 停止する。待機コマンドが走っていなければ Park 手順 3 で起動してから停止する。")" \
+        '{decision: "block", reason: $r}'
+      exit 0
+    fi
+  fi
+  allow "parked: directive exhausted, waiting for a new DIRECTIVE.md"
+fi
 
 left=$(vqcc_min_to_end)
 
@@ -104,7 +136,12 @@ if [ "$left" -le "$VQCC_WRAPUP_MIN" ]; then
   date +%s > "$wdir/wrapup_sent"
   msg="夜間ウィンドウ終了まで残り約 ${left} 分。新しい長時間実験は始めず、走行中の検証結果を回収して ledger に記録し、work/${worker}/NOTES.md の「現在地」「次にやること」を更新してコミット (work/ のローカル git) してください。終わったら短く報告して停止してよい。"
 else
+  if plat=$(audit_due); then
+    jq -n --arg r "$(audit_msg "$plat" "(4) 未着手の観点のうち最も期待値の高いものを NOTES.md「次にやること」の先頭に入れて続行する。")" \
+      '{decision: "block", reason: $r}'
+    exit 0
+  fi
   read -r five _ seven _ < <(vqcc_usage)
-  msg="続行してください (継続 #${n}, 窓の残り約 ${left} 分, 5h 使用率 ${five}%)。work/${worker}/NOTES.md の「次にやること」から最も期待値の高い実験を選び、仮説→実装→bin/vqcc-verify で評価→ledger 記録→NOTES 更新のループを回す。検証待ちの間は次の候補を準備する。ユーザーへの確認は不要 (誰も見ていない)。行き詰まったら別のアプローチに切り替え、その理由を NOTES に残す。ただし DIRECTIVE.md の優先実験がすべて停止条件に達し、走行中の検証も無いなら、小さな再チューニングで時間を埋めず skill optimizing-vqcc-circuits の「Park」手順で待機する。"
+  msg="続行してください (継続 #${n}, 窓の残り約 ${left} 分, 5h 使用率 ${five}%)。work/${worker}/NOTES.md の「次にやること」から最も期待値の高い実験を選び、仮説→実装→bin/vqcc-verify で評価→ledger 記録→NOTES 更新のループを回す。検証待ちの間は次の候補を準備する。ユーザーへの確認は不要 (誰も見ていない)。work/${worker}/DECISIONS.md の「監査役の観点」に未着手が残っていれば、それを先に検討する。行き詰まったら別のアプローチに切り替え、その理由を NOTES に残す。ただし DIRECTIVE.md の優先実験がすべて停止条件に達し、走行中の検証も無いなら、小さな再チューニングで時間を埋めず skill optimizing-vqcc-circuits の「Park」手順で待機する。"
 fi
 jq -n --arg r "$msg" '{decision: "block", reason: $r}'

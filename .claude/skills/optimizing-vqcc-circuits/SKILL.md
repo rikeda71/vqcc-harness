@@ -21,7 +21,7 @@ For public notebooks and discussions, use skill `gathering-vqcc-intel`.
 
 1. Read `$VQCC_WORKER` to know the task. Work only in `work/<task>/`.
 2. Read, in this order, whatever exists: `work/<task>/DIRECTIVE.md` (the strategist's current orders,
-   see Step 2), `work/<task>/NOTES.md`, `work/<task>/BRIEF.md`,
+   see Step 2), `work/<task>/DECISIONS.md` (the short decision record, Step 5), `work/<task>/NOTES.md`, `work/<task>/BRIEF.md`,
    `work/BRIEF_OVERVIEW.md`, `work/HARNESS_ISSUES.md`, and the 「固定規則」 section and the latest
    「作戦参謀の裁定」 entry of `work/STRATEGY.md` (the fixed rules outrank the directive). On your first session (or when NOTES.md does not
    mention it yet), also read `docs/intel/kaggle-vqcc-primer.md` (cost tables, score trade-offs, verifier
@@ -30,7 +30,9 @@ For public notebooks and discussions, use skill `gathering-vqcc-intel`.
    sections with `grep -n '^## ' <file> | head -20` and print only the ones you need with `sed -n 'A,Bp' <file>`.
 3. Run `bin/vqcc-best` to see the verified best per task and the predicted LB score.
 4. Run `bin/vqcc-remote status` to see remote jobs still in flight for this task.
-5. If `work/<task>/NOTES.md` does not exist, create it from the template below before any experiment.
+5. If `work/<task>/NOTES.md` or `work/<task>/DECISIONS.md` does not exist, create it from the template
+   below before any experiment (fill DECISIONS.md from NOTES.md: the current best's cost breakdown and
+   the items already tried or ruled out).
 
 ## Step 2: Choose the next experiment
 
@@ -169,7 +171,27 @@ After every evaluated candidate:
 2. When a candidate enters "現在のベスト" (full/remote PASS on two salts), snapshot it with its generator:
    `bin/vqcc-model save <task> <path> --src work/<task>/src --cmd "<regenerate command>" --note "<what changed>"`.
    `bin/vqcc-model list <task>` shows the versions (v1, v2, …), their verified ratio and their Kaggle public LB.
-3. Commit: `git -C work add -A && git -C work commit -q -m "<task>: <what changed>"`.
+3. Update `work/<task>/DECISIONS.md` when a decision changed: one line per kept or reverted candidate in
+   試した手と前後の値, and a new 律速 / 上限 / 試さなかった手 line when a measurement changed what you
+   believe. Keep it under ~200 lines so it stays readable in one Read: drop superseded lines (NOTES keeps
+   the history). Every 律速 and 上限 line needs a 根拠 that someone else can rerun.
+4. Commit: `git -C work add -A && git -C work commit -q -m "<task>: <what changed>"`.
+
+## Plateau audit
+
+When the Stop hook says `(監査)` (the verified best has not improved for hours), a fresh auditor checks
+the decision record against generic perspectives before you go on:
+
+1. Bring DECISIONS.md up to date (create it from the template if missing).
+2. Start one subagent (Agent tool, no `model`) with the brief in [audit.md](audit.md) section "Brief",
+   `<task>` replaced. Wait for it; do not start the auditor twice.
+3. Write its lines under 監査役の観点 in DECISIONS.md with the time (replace the previous audit's lines),
+   and commit.
+4. Take the best 未着手 experiment it proposes into NOTES.md 次にやること, first, unless it conflicts with
+   DIRECTIVE やめること, BLOCKLIST or the fixed rules (then note why under 監査役の観点). An experiment the
+   directive does not list goes in 指令との差分 as usual. If you were parked, the hook message says what to do.
+5. A perspective the auditor proposes beyond the list goes to `work/HARNESS_ISSUES.md` as a ハーネス要望,
+   without task names.
 
 ## Rules that override convenience
 
@@ -212,4 +234,31 @@ After every evaluated candidate:
 
 ## 指令との差分
 - YYYY-MM-DD HH:MM DIRECTIVE の項目 / 従わなかった・変えた内容 / 根拠 (cand_id・ledger・監査結果)
+```
+
+## DECISIONS.md template
+
+The decision record: what you currently believe and why, short enough for the strategist and the auditor
+to read in full (NOTES.md is the full log). Numbers come from the current verified best unless a line says
+otherwise.
+
+```markdown
+# <task> DECISIONS (最終更新: YYYY-MM-DD HH:MM, verified best <cand_id> ratio <r>)
+
+## いま律速だと判断しているもの
+- <コスト項 (段・量)> が <値> (score の <割合>)
+  - 根拠: `<数分で再実行できるコマンド>` → <出力の要点>
+
+## 上限だと判断した値
+- <量> は <値> より下がらない
+  - 根拠: <証明 / 網羅 / 較正済みの探索。探索が見つけなかっただけなら「未確認」と書く>
+
+## 試した手と前後の値
+- YYYY-MM-DD <手> <cand_id>: <before> → <after> (<tier>, 採った|戻した)
+
+## 検討して試さなかった手
+- <手>: <規則 (AGENTS / BRIEF / 固定規則 / BLOCKLIST) か、数値による試算>
+
+## 監査役の観点 (YYYY-MM-DD HH:MM)
+- <番号> 退けた|採った|未着手: <要約> <数値> 問い: <次に確かめること>
 ```

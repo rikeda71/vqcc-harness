@@ -116,9 +116,69 @@ def wake_check(task: str) -> str | None:
                      + (f" ratio {r['ratio']:.5f}" if r.get("ratio") else "") for r in new[-6:])
 
 
+def _ledger():
+    sys.path.insert(0, str(ROOT / "harness"))
+    import ledger  # noqa: E402
+    return ledger
+
+
+def plateau_min(task: str, now: dt.datetime | None = None) -> int | None:
+    """Minutes since the task's current verified best got its first full/remote PASS (how long the verified
+    best has not improved); None without a verified best. The Stop hook starts the auditor from this."""
+    ledger = _ledger()
+    best = ledger.verified_best(task)
+    if not best:
+        return None
+    first = min(dt.datetime.fromisoformat(r["ts"]) for r in ledger.records()
+                if r.get("task") == task and r.get("cand_id") == best["cand_id"]
+                and r.get("tier") in ("full", "remote") and r.get("status") == "PASS")
+    now = now or dt.datetime.now().astimezone()
+    return max(0, int((now - first).total_seconds() // 60))
+
+
+def new_results(task: str, since: float, limit: int = 6) -> str | None:
+    """One line on the task's remote results recorded after the epoch time `since`, each with its ratio against
+    the verified best; None when there are none. Remote jobs land in the ledger asynchronously (supervisor
+    poll), so the worker would not see them otherwise; quick/full runs print their result to the caller."""
+    ledger = _ledger()
+    t0 = dt.datetime.fromtimestamp(since).astimezone()
+    new = [r for r in ledger.records() if r.get("task") == task and r.get("tier") == "remote"
+           and dt.datetime.fromisoformat(r["ts"]) > t0]
+    if not new:
+        return None
+    best = ledger.verified_best(task)
+    ref = ledger.load_refs().get(task)
+    bratio = ref / best["score"] if best and ref and best["score"] else None
+    parts = []
+    for r in new[-limit:]:
+        p = f"{r['cand_id']} {r['tier']}{'/' + r['salt'] if r.get('salt') else ''} {r['status']}"
+        if r.get("ratio"):
+            p += f" ratio {r['ratio']:.5f}"
+            if bratio:
+                p += f" (best 比 {r['ratio'] / bratio - 1:+.3%})"
+        if r.get("label"):
+            p += f" [{_cut(r['label'])[:60]}]"
+        parts.append(p)
+    more = f" ほか {len(new) - limit} 件" if len(new) > limit else ""
+    best_txt = f"verified best {best['cand_id']} ratio {bratio:.5f}" if bratio else "verified best なし"
+    return "; ".join(parts) + more + f" — {best_txt}"
+
+
 if __name__ == "__main__":
     # workers.py                  -> the worker-state lines (bin/vqcc-schedule status)
     # workers.py wake-check TASK  -> exit 0 and print the new results when a parked TASK should be woken
+    # workers.py plateau TASK     -> minutes since TASK's verified best first PASSed (exit 1 without one)
+    # workers.py new-results TASK EPOCH -> TASK's remote results since EPOCH (exit 1 when none)
+    if len(sys.argv) == 3 and sys.argv[1] == "plateau":
+        m = plateau_min(sys.argv[2])
+        if m is not None:
+            print(m)
+        sys.exit(0 if m is not None else 1)
+    if len(sys.argv) == 4 and sys.argv[1] == "new-results":
+        msg = new_results(sys.argv[2], float(sys.argv[3]))
+        if msg:
+            print(msg)
+        sys.exit(0 if msg else 1)
     if len(sys.argv) == 3 and sys.argv[1] == "wake-check":
         msg = wake_check(sys.argv[2])
         if msg:

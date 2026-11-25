@@ -97,6 +97,14 @@ VQCC_STRATEGY_ALL_PARKED_MAX="${VQCC_STRATEGY_ALL_PARKED_MAX:-4}"
 # checked hourly, whenever free disk is below this many GB. Thresholds: VQCC_CLEANUP_* in cleanup.py.
 VQCC_CLEANUP_FREE_MIN_GB="${VQCC_CLEANUP_FREE_MIN_GB:-50}"
 
+# Plateau audit (harness/hooks/stop.sh, skill optimizing-vqcc-circuits audit.md): when a task's verified
+# best has not improved for VQCC_AUDIT_PLATEAU_MIN minutes (0 = off), the Stop hook has the worker run a
+# fresh auditor subagent over work/<task>/DECISIONS.md, at most once per VQCC_AUDIT_COOLDOWN_MIN minutes,
+# not in the first VQCC_AUDIT_NIGHT_GRACE_MIN minutes of a night nor within 30 min of the wrap-up.
+VQCC_AUDIT_PLATEAU_MIN="${VQCC_AUDIT_PLATEAU_MIN:-180}"
+VQCC_AUDIT_COOLDOWN_MIN="${VQCC_AUDIT_COOLDOWN_MIN:-240}"
+VQCC_AUDIT_NIGHT_GRACE_MIN="${VQCC_AUDIT_NIGHT_GRACE_MIN:-60}"
+
 # 0 (true) when worker $1 is parked: work/$1/IDLE exists and is not older than work/$1/DIRECTIVE.md.
 vqcc_parked() {
   local i="$VQCC_ROOT/work/$1/IDLE" d="$VQCC_ROOT/work/$1/DIRECTIVE.md"

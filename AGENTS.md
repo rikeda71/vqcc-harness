@@ -17,6 +17,9 @@
 - 環境変数 `VQCC_WORKER` が担当タスク (`invsqrt` | `dqi` | `dfthcsos`)。担当以外のタスクの `work/` には書かない (読むのは可)。
 - 手順は skill `optimizing-vqcc-circuits` に従う。評価の詳細は skill `evaluating-vqcc-candidates`、公開情報の取り込みは skill `gathering-vqcc-intel`。
 - 背景知識 (算術回路の Toffoli 数、スコアの換算レート、verifier の挙動、invsqrt の近似設計) は `docs/intel/kaggle-vqcc-primer.md` (外部の非公式解説書の要約。公式 verifier と食い違えば verifier が正)。
+- 判断の記録 `work/<task>/DECISIONS.md` (律速と根拠・上限・試した手の前後の値・試さなかった手・監査役の観点。200 行以内) を保つ。
+  verified best が `VQCC_AUDIT_PLATEAU_MIN` (既定 180 分) 更新されないと、Stop hook が「(監査)」で白紙の監査役 subagent による点検を指示する
+  (手順は skill `optimizing-vqcc-circuits` の「Plateau audit」)。自タスクの remote 結果は ledger に入った時点で hook が通知する。
 - 作業場所は `work/<task>/` だけ (例外: 全ワーカー共有の追記用ファイル `work/INTEL_INDEX.md`, `work/HARNESS_ISSUES.md`, `work/BRIEF_OVERVIEW.md` の「ルール解釈」節)。ソースは `work/<task>/src/`、生成物は `work/<task>/out/`、メモは `work/<task>/NOTES.md`。
   `work/` はローカル専用の git リポジトリ (公開しない)。実験の区切りごとに `git -C work add -A && git -C work commit -m "<task>: ..."`。
 

@@ -104,6 +104,9 @@ Then read:
 - `work/STRATEGY.md` and the newest entries of `work/strategy/log.md` (the previous pass's decisions).
 - Each `work/<task>/DIRECTIVE.md` (the previous directive) and `work/<task>/IDLE` if present (the
   worker parked; see Step 4).
+- Each `work/<task>/DECISIONS.md` (short: what limits the task, which bounds are proven, what was tried
+  and ruled out, and the last plateau audit). Its 未着手 audit lines are candidate experiments; a 上限 line
+  whose 根拠 says 未確認 is a premise to test, not a reason to stop the task.
 - Each `work/<task>/NOTES.md` in full: 現在のベスト, 現在地, 進行中, 次にやること, the last ~15 entries
   of 試したこと, 知見, and 指令との差分 (where the worker explains any deviation).
   Also read any plan files that NOTES points to (e.g. `work/dqi/PLAN_Q.md`).

@@ -18,9 +18,15 @@ Policy for --auto (every check is recorded; the first failing one is the "reason
     STRATEGY.md 固定規則 3/6 require for "best"; a newer candidate with one salt so far waits and the
     previous 2-salt best is used); tasks without one fall back to the official sample (ratio 1.0)
   * the exact combination of candidates must not have been submitted before
-  * the predicted LB (geometric mean of per-task ratio = ref / score) must beat, by > MIN_GAIN
-    (relative), both every previous submission's prediction and the best public score Kaggle
-    actually gave us
+  * the combination must be expected to beat the best public score Kaggle actually gave us. Once a
+    COMPLETE submission exists, the expectation is differential (estimate_public): that submission's
+    public score x geomean over tasks of (its candidate's verified score / the new candidate's
+    verified score). A task whose candidate is unchanged contributes exactly 1, so a stochastic task
+    (dqi: our verified score is its worst salt, the public salt is luckier) no longer drags the
+    estimate below the public score. It must exceed the best public by > EST_MIN_GAIN (relative;
+    a tie plateau on the LB is broken by a 1-Toffoli step, so the threshold is tiny). Without a
+    COMPLETE submission, the old rule applies: the predicted LB (geometric mean of per-task
+    ratio = ref / score) must beat, by > MIN_GAIN, every previous prediction and the best public
   * at most VQCC_MAX_SUBMITS_PER_DAY submissions per UTC day (counted from Kaggle itself and
     from our own log, whichever is larger)
 Every attempt (submitted or not) is appended to state/submissions.jsonl. The upload is
@@ -59,6 +65,7 @@ SAMPLE = ROOT / "data" / "raw" / "sample_submission"
 COMP = os.environ.get("VQCC_COMPETITION", "google-verifiable-quantum-circuit-compilation")
 MAX_PER_DAY = int(os.environ.get("VQCC_MAX_SUBMITS_PER_DAY", "5"))
 MIN_GAIN = 1e-4
+EST_MIN_GAIN = float(os.environ.get("VQCC_SUBMIT_EST_MIN_GAIN", "1e-7"))
 MIN_SALTS = int(os.environ.get("VQCC_SUBMIT_MIN_SALTS", "2"))
 MSG_RE = re.compile(r"vqcc-harness pred=([0-9.]+)\s+(.*)")
 
@@ -163,6 +170,41 @@ def choose(exclude: dict[str, dict[str, str]] | None = None) -> dict:
                            "ratio": 1.0, "label": "official sample", "version": None}
     pred = math.exp(sum(math.log(c["ratio"]) for c in comps.values()) / len(comps))
     return {"components": comps, "predicted": pred}
+
+
+def cand_score(task: str, cand_id: str) -> float | None:
+    """Verified score of one candidate as verified_best rates it (worst salt over its full/remote
+    runs; None unless every such run PASSed). The official sample scores its ref."""
+    if cand_id == "sample":
+        return ledger.load_refs().get(task)
+    runs = [r for r in ledger.records() if r.get("task") == task and r.get("cand_id") == cand_id
+            and r.get("tier") in ("full", "remote") and r.get("status") in ("PASS", "FAIL")]
+    if not runs or any(r["status"] != "PASS" for r in runs):
+        return None
+    return max(r["score"] for r in runs)
+
+
+def estimate_public(choice: dict, ours: list[dict]) -> tuple[float | None, dict | None]:
+    """(expected public LB of `choice`, the COMPLETE submission it is measured from). The base is our
+    best-scoring COMPLETE submission; each task whose candidate differs from the base's multiplies
+    the base's public score by (base candidate's verified score / new verified score)^(1/n_tasks).
+    (None, base) if a changed task's base candidate has no verified score; (None, None) without a
+    COMPLETE submission."""
+    done = [k for k in ours if k.get("status") == "complete" and k.get("public") is not None]
+    if not done:
+        return None, None
+    base = max(done, key=lambda k: k["public"])
+    comps = choice["components"]
+    log_gain = 0.0
+    for task, c in comps.items():
+        old = base["ids"].get(task, "sample")
+        if old == c["cand_id"]:
+            continue
+        s_old = cand_score(task, old)
+        if not s_old or not c["score"]:
+            return None, base
+        log_gain += math.log(s_old / c["score"])
+    return base["public"] * math.exp(log_gain / len(comps)), base
 
 
 def build_zip(choice: dict, name: str) -> Path:
@@ -364,6 +406,7 @@ def main() -> int:
     public_best = max((k["public"] for k in ours if k["status"] == "complete" and k["public"] is not None),
                       default=0.0)
     baseline = max(prev_best, public_best)
+    est, est_base = estimate_public(choice, ours)
     today = now.date().isoformat()
     ours_today = sum(1 for r in prev if r["ts"].startswith(today))
     kag_today = None if rows is None else sum(1 for r in rows if str(r.get("date", "")).startswith(today))
@@ -372,7 +415,8 @@ def main() -> int:
     pending = [k for k in ours if k["status"] == "pending" and age_h(k["date"], now) < PENDING_MAX_H]
     rec = {"ts": now.isoformat(timespec="seconds"), "predicted": choice["predicted"], "ids": ids,
            "versions": versions, "prev_best_predicted": prev_best, "best_public": public_best,
-           "used_today": used, "submitted": False, "excluded_error_suspects": suspects}
+           "used_today": used, "submitted": False, "excluded_error_suspects": suspects,
+           "est_public": est, "est_base_ref": est_base and str(est_base.get("ref"))}
 
     if rows is None:
         rec["reason"] = "could not read Kaggle submissions"
@@ -386,18 +430,24 @@ def main() -> int:
         rec["reason"] = "nothing verified yet"
     elif ids in done_combos:
         rec["reason"] = "this combination was already submitted"
-    elif choice["predicted"] <= baseline * (1 + MIN_GAIN):
+    elif est is not None and est <= public_best * (1 + EST_MIN_GAIN):
+        rec["reason"] = (f"no improvement: expected public {est:.6f} (from submission {est_base['ref']}) "
+                         f"vs best public LB {public_best:.5f}")
+    elif est is None and choice["predicted"] <= baseline * (1 + MIN_GAIN):
         rec["reason"] = (f"no improvement over max(previous prediction {prev_best:.5f}, "
                          f"best public LB {public_best:.5f})")
     elif a.dry_run:
         rec["reason"] = "dry-run: would submit"
-        print(json.dumps({k: rec[k] for k in ("reason", "predicted", "prev_best_predicted", "best_public",
-                                               "used_today")}))
+        print(json.dumps({k: rec[k] for k in ("reason", "predicted", "est_public", "prev_best_predicted",
+                                               "best_public", "used_today")}))
         return 0
     else:
         name = now.strftime("%Y%m%dT%H%M%SZ")
         zpath = build_zip(choice, name)
-        msg = f"vqcc-harness pred={choice['predicted']:.5f} " + " ".join(f"{t}={i}" for t, i in ids.items())
+        # pred= is what sync_kaggle checks the public score against (LB_GAP_BLOCK): the differential
+        # estimate when there is one, since it is on the public score's scale.
+        pred = est if est is not None else choice["predicted"]
+        msg = f"vqcc-harness pred={pred:.5f} " + " ".join(f"{t}={i}" for t, i in ids.items())
         # VERBOSE=1 makes the CLI print Kaggle's response body (the reason of a 400); the raw output
         # also holds credentials, so only the sanitized form is logged.
         r = subprocess.run(["kaggle", "competitions", "submit", COMP, "-f", str(zpath), "-m", msg],
@@ -409,7 +459,7 @@ def main() -> int:
         rec["reason"] = "submitted" if r.returncode == 0 else (
             "kaggle submit failed" + (f": {' '.join(resp.split())[:300]}" if resp else ""))
     log(rec)
-    print(json.dumps({k: rec[k] for k in ("submitted", "reason", "predicted", "prev_best_predicted",
+    print(json.dumps({k: rec[k] for k in ("submitted", "reason", "predicted", "est_public", "prev_best_predicted",
                                            "best_public", "used_today", "excluded_error_suspects")}))
     return 1 if rec.get("returncode") not in (None, 0) else 0
 

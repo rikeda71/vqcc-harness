@@ -76,6 +76,8 @@ VQCC_AGY_FAIL_COOLDOWN_MIN="${VQCC_AGY_FAIL_COOLDOWN_MIN:-60}"
 
 # Submissions: Kaggle allows 5/day (UTC); the harness uses at most this many.
 VQCC_MAX_SUBMITS_PER_DAY="${VQCC_MAX_SUBMITS_PER_DAY:-5}"
+# Minutes between auto-submit checks during a night (the first one comes this long after the start).
+VQCC_SUBMIT_INTERVAL_MIN="${VQCC_SUBMIT_INTERVAL_MIN:-30}"
 VQCC_COMPETITION="google-verifiable-quantum-circuit-compilation"
 VQCC_TEAM_NAME="${VQCC_TEAM_NAME:-ikechan}"  # our team name on the leaderboard (bin/vqcc-standing)
 # Target for the strategist: gold | silver | bronze | <score>; empty = the next medal line above us.

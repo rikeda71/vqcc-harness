@@ -431,10 +431,11 @@ while :; do
   fi
 
   # Submit when the verified best improved (deterministic policy in harness/submit.py): every
-  # 2 hours and once more 15 minutes before the window closes. The daily cap is enforced there.
+  # VQCC_SUBMIT_INTERVAL_MIN minutes and once more 15 minutes before the window closes. The daily cap is enforced there.
   if [ "$FORCE" = 0 ]; then
     left=$(vqcc_min_to_end)
-    if { [ $(( now - LAST_SUBMIT_TRY )) -ge 7200 ] && [ $(( now - START_TS )) -ge 5400 ]; } || \
+    sub_s=$(( ${VQCC_SUBMIT_INTERVAL_MIN:-30} * 60 ))
+    if { [ $(( now - LAST_SUBMIT_TRY )) -ge "$sub_s" ] && [ $(( now - START_TS )) -ge "$sub_s" ]; } || \
        { [ "$SUBMITTED_TONIGHT" = 0 ] && [ "$left" -le 15 ]; }; then
       LAST_SUBMIT_TRY=$now
       "$ROOT/bin/vqcc-model" sync >> "$VQCC_STATE/logs/model.log" 2>&1
